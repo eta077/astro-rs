@@ -103,75 +103,74 @@ impl HduList {
                 .unwrap_or_default();
             if naxis == 0 {
                 hdus.push(Hdu::new(header, Vec::<u8>::new()));
-            } else {
-                if let Some(bitpix) = header
-                    .get_card(BITPIX_KEYWORD)
-                    .and_then(|card| card.get_value::<Bitpix>().ok())
-                {
-                    let mut data_len = 1;
-                    for x in 1..=naxis {
-                        let mut naxisx_keyword = NAXIS_KEYWORD;
-                        let x_bytes = x.to_string().into_bytes();
-                        for (index, i) in x_bytes.iter().enumerate() {
-                            naxisx_keyword[index + 5] = *i;
-                        }
-
-                        let naxisx = *header
-                            .get_card(naxisx_keyword)
-                            .and_then(|card| card.get_value::<u32>().ok())
-                            .unwrap_or_default() as usize;
-                        data_len *= naxisx;
-                    }
-                    data_len *= bitpix.value() / 8;
-                    let data_raw: Vec<u8> =
-                        raw.drain(0..data_len.clamp(data_len, raw.len())).collect();
-                    match *bitpix {
-                        Bitpix::U8 => hdus.push(Hdu::new(header, data_raw)),
-                        Bitpix::I16 => {
-                            let mut data = Vec::with_capacity(data_raw.len() / 2);
-                            for chunk in data_raw.chunks_exact(2) {
-                                data.push(i16::from_be_bytes(chunk.try_into().unwrap()));
-                            }
-                            hdus.push(Hdu::new(header, data));
-                        }
-                        Bitpix::I32 => {
-                            let mut data = Vec::with_capacity(data_raw.len() / 4);
-                            for chunk in data_raw.chunks_exact(4) {
-                                data.push(i32::from_be_bytes(chunk.try_into().unwrap()));
-                            }
-                            hdus.push(Hdu::new(header, data));
-                        }
-                        Bitpix::F32 => {
-                            let mut data = Vec::with_capacity(data_raw.len() / 4);
-                            for chunk in data_raw.chunks_exact(4) {
-                                data.push(f32::from_be_bytes(chunk.try_into().unwrap()));
-                            }
-                            hdus.push(Hdu::new(header, data));
-                        }
-                        Bitpix::F64 => {
-                            let mut data = Vec::with_capacity(data_raw.len() / 8);
-                            for chunk in data_raw.chunks_exact(8) {
-                                data.push(f64::from_be_bytes(chunk.try_into().unwrap()));
-                            }
-                            hdus.push(Hdu::new(header, data));
-                        }
+            } else if let Some(bitpix) = header
+                .get_card(BITPIX_KEYWORD)
+                .and_then(|card| card.get_value::<Bitpix>().ok())
+            {
+                let mut data_len = 1;
+                for x in 1..=naxis {
+                    let mut naxisx_keyword = NAXIS_KEYWORD;
+                    let x_bytes = x.to_string().into_bytes();
+                    for (index, i) in x_bytes.iter().enumerate() {
+                        naxisx_keyword[index + 5] = *i;
                     }
 
-                    // drain padding to reach next header
-                    let mut match_index = raw.len();
-                    for (index, b) in raw.iter().enumerate() {
-                        match *b {
-                            0 | b' ' => (),
-                            _ => {
-                                match_index = index;
-                                break;
-                            }
+                    let naxisx = *header
+                        .get_card(naxisx_keyword)
+                        .and_then(|card| card.get_value::<u32>().ok())
+                        .unwrap_or_default() as usize;
+                    data_len *= naxisx;
+                }
+                data_len *= bitpix.value() / 8;
+                let data_raw: Vec<u8> = raw.drain(0..data_len.clamp(data_len, raw.len())).collect();
+                match *bitpix {
+                    Bitpix::U8 => hdus.push(Hdu::new(header, data_raw)),
+                    Bitpix::I16 => {
+                        let mut data = Vec::with_capacity(data_raw.len() / 2);
+                        for chunk in data_raw.chunks_exact(2) {
+                            data.push(i16::from_be_bytes(chunk.try_into().unwrap()));
                         }
+                        hdus.push(Hdu::new(header, data));
                     }
-                    if match_index != 0 {
-                        raw.drain(0..match_index);
+                    Bitpix::I32 => {
+                        let mut data = Vec::with_capacity(data_raw.len() / 4);
+                        for chunk in data_raw.chunks_exact(4) {
+                            data.push(i32::from_be_bytes(chunk.try_into().unwrap()));
+                        }
+                        hdus.push(Hdu::new(header, data));
+                    }
+                    Bitpix::F32 => {
+                        let mut data = Vec::with_capacity(data_raw.len() / 4);
+                        for chunk in data_raw.chunks_exact(4) {
+                            data.push(f32::from_be_bytes(chunk.try_into().unwrap()));
+                        }
+                        hdus.push(Hdu::new(header, data));
+                    }
+                    Bitpix::F64 => {
+                        let mut data = Vec::with_capacity(data_raw.len() / 8);
+                        for chunk in data_raw.chunks_exact(8) {
+                            data.push(f64::from_be_bytes(chunk.try_into().unwrap()));
+                        }
+                        hdus.push(Hdu::new(header, data));
                     }
                 }
+
+                // drain padding to reach next header
+                let mut match_index = raw.len();
+                for (index, b) in raw.iter().enumerate() {
+                    match *b {
+                        0 | b' ' => (),
+                        _ => {
+                            match_index = index;
+                            break;
+                        }
+                    }
+                }
+                if match_index != 0 {
+                    raw.drain(0..match_index);
+                }
+            } else {
+                hdus.push(Hdu::new(header, Vec::<u8>::new()));
             }
         }
         Ok(HduList { hdus })
