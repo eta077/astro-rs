@@ -78,13 +78,15 @@ impl HduList {
                 }
                 if end_found {
                     // drain padding to reach data
-                    while let Some(b) = raw.first() {
-                        match *b {
-                            b' ' => {
-                                raw.remove(0);
-                            }
-                            _ => break,
+                    let mut match_index = raw.len();
+                    for (index, b) in raw.iter().enumerate() {
+                        if *b != b' ' {
+                            match_index = index;
+                            break;
                         }
+                    }
+                    if match_index != 0 {
+                        raw.drain(0..match_index);
                     }
                     break;
                 }
@@ -94,47 +96,82 @@ impl HduList {
             }
 
             let mut header = FitsHeader::from_bytes(header_raw)?;
-            let mut data = Vec::new();
 
             let naxis = *header
-                .get_card_mut(NAXIS_KEYWORD)
+                .get_card(NAXIS_KEYWORD)
                 .and_then(|card| card.get_value::<u16>().ok())
                 .unwrap_or_default();
-            if naxis > 0 {
-                let bitpix = header
-                    .get_card_mut(BITPIX_KEYWORD)
-                    .and_then(|card| card.get_value::<Bitpix>().ok())
-                    .map(|bitpix| bitpix.value())
-                    .unwrap_or_default();
-                if bitpix > 0 {
-                    let mut data_len = 1;
-                    for x in 1..=naxis {
-                        let mut naxisx_keyword = NAXIS_KEYWORD;
-                        let x_bytes = x.to_string().into_bytes();
-                        for (index, i) in x_bytes.iter().enumerate() {
-                            naxisx_keyword[index + 5] = *i;
-                        }
-
-                        let naxisx = *header
-                            .get_card_mut(naxisx_keyword)
-                            .and_then(|card| card.get_value::<u32>().ok())
-                            .unwrap_or_default() as usize;
-                        data_len *= naxisx;
+            if naxis == 0 {
+                hdus.push(Hdu::new(header, Vec::<u8>::new()));
+            } else if let Some(bitpix) = header
+                .get_card(BITPIX_KEYWORD)
+                .and_then(|card| card.get_value::<Bitpix>().ok())
+            {
+                let mut data_len = 1;
+                for x in 1..=naxis {
+                    let mut naxisx_keyword = NAXIS_KEYWORD;
+                    let x_bytes = x.to_string().into_bytes();
+                    for (index, i) in x_bytes.iter().enumerate() {
+                        naxisx_keyword[index + 5] = *i;
                     }
-                    data_len *= bitpix / 8;
-                    data = raw.drain(0..data_len.clamp(data_len, raw.len())).collect();
-                    // drain padding to reach next header
-                    while let Some(b) = raw.first() {
-                        match *b {
-                            0 | b' ' => {
-                                raw.remove(0);
-                            }
-                            _ => break,
+
+                    let naxisx = *header
+                        .get_card(naxisx_keyword)
+                        .and_then(|card| card.get_value::<u32>().ok())
+                        .unwrap_or_default() as usize;
+                    data_len *= naxisx;
+                }
+                data_len *= bitpix.value() / 8;
+                let data_raw: Vec<u8> = raw.drain(0..data_len.clamp(data_len, raw.len())).collect();
+                match *bitpix {
+                    Bitpix::U8 => hdus.push(Hdu::new(header, data_raw)),
+                    Bitpix::I16 => {
+                        let mut data = Vec::with_capacity(data_raw.len() / 2);
+                        for chunk in data_raw.chunks_exact(2) {
+                            data.push(i16::from_be_bytes(chunk.try_into().unwrap()));
+                        }
+                        hdus.push(Hdu::new(header, data));
+                    }
+                    Bitpix::I32 => {
+                        let mut data = Vec::with_capacity(data_raw.len() / 4);
+                        for chunk in data_raw.chunks_exact(4) {
+                            data.push(i32::from_be_bytes(chunk.try_into().unwrap()));
+                        }
+                        hdus.push(Hdu::new(header, data));
+                    }
+                    Bitpix::F32 => {
+                        let mut data = Vec::with_capacity(data_raw.len() / 4);
+                        for chunk in data_raw.chunks_exact(4) {
+                            data.push(f32::from_be_bytes(chunk.try_into().unwrap()));
+                        }
+                        hdus.push(Hdu::new(header, data));
+                    }
+                    Bitpix::F64 => {
+                        let mut data = Vec::with_capacity(data_raw.len() / 8);
+                        for chunk in data_raw.chunks_exact(8) {
+                            data.push(f64::from_be_bytes(chunk.try_into().unwrap()));
+                        }
+                        hdus.push(Hdu::new(header, data));
+                    }
+                }
+
+                // drain padding to reach next header
+                let mut match_index = raw.len();
+                for (index, b) in raw.iter().enumerate() {
+                    match *b {
+                        0 | b' ' => (),
+                        _ => {
+                            match_index = index;
+                            break;
                         }
                     }
                 }
+                if match_index != 0 {
+                    raw.drain(0..match_index);
+                }
+            } else {
+                hdus.push(Hdu::new(header, Vec::<u8>::new()));
             }
-            hdus.push(Hdu { header, data });
         }
         Ok(HduList { hdus })
     }
@@ -160,16 +197,27 @@ impl HduList {
 }
 
 /// A representation of a Header Data Unit within a FITS file.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Hdu {
     pub header: FitsHeader,
-    data: Vec<u8>,
+    data: Rc<dyn FitsDataCollection>,
 }
 
 impl Hdu {
     /// Constructs an empty HDU.
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(header: FitsHeader, data: impl FitsDataCollection + 'static) -> Self {
+        Hdu {
+            header,
+            data: Rc::new(data),
+        }
+    }
+
+    pub fn get_data<T: FitsDataCollection>(&self) -> Rc<T> {
+        unsafe {
+            let ptr = Rc::into_raw(Rc::clone(&self.data));
+            let new_ptr: *const T = ptr.cast();
+            Rc::from_raw(new_ptr)
+        }
     }
 }
 
@@ -207,19 +255,8 @@ impl FitsHeader {
         Ok(FitsHeader { cards })
     }
 
-    pub fn get_card<K>(&self, keyword: K) -> Option<&FitsHeaderCard>
-    where
-        FitsHeaderKeyword: PartialEq<K>,
-    {
-        for card in &self.cards {
-            if card.keyword == keyword {
-                return Some(card);
-            }
-        }
-        None
-    }
-
-    pub fn get_card_mut<K>(&mut self, keyword: K) -> Option<&mut FitsHeaderCard>
+    /// Searches the header cards for a match with the given keyword.
+    pub fn get_card<K>(&mut self, keyword: K) -> Option<&mut FitsHeaderCard>
     where
         FitsHeaderKeyword: PartialEq<K>,
     {
@@ -237,7 +274,7 @@ pub struct FitsHeaderCard {
     raw: Vec<u8>,
     keyword: FitsHeaderKeyword,
     value: Option<Rc<dyn FitsHeaderValue>>,
-    comment: Option<String>,
+    comment: Option<Rc<String>>,
 }
 
 impl FitsHeaderCard {
@@ -259,7 +296,7 @@ impl FitsHeaderCard {
                 .raw
                 .iter()
                 .position(|b| *b == b'/')
-                .unwrap_or_else(|| self.raw.len());
+                .unwrap_or(self.raw.len());
             let value_bytes = self
                 .raw
                 .drain(value_start_index..comment_start_index)
@@ -269,6 +306,41 @@ impl FitsHeaderCard {
             let ret = Rc::clone(&data);
             self.value = Some(data);
             Ok(ret)
+        }
+    }
+
+    /// Gets the comment section of the header card.
+    ///
+    /// ```
+    /// use astro_rs::fits::FitsHeaderCard;
+    ///
+    /// let mut card = FitsHeaderCard::from(*b"SIMPLE  =                    T / FITS STANDARD                                  ");
+    /// assert_eq!(*card.get_comment()?, String::from("FITS STANDARD"));
+    /// # Ok::<(), astro_rs::fits::FitsHeaderError>(())
+    /// ```
+    pub fn get_comment(&mut self) -> Result<Rc<String>, FitsHeaderError> {
+        if let Some(data) = &self.comment {
+            Ok(Rc::clone(data))
+        } else if let Some(comment_start_index) = self
+            .raw
+            .iter()
+            .position(|b| *b == b'/')
+            .map(|index| index + 1)
+        {
+            let value_bytes = self.raw.drain(comment_start_index..).collect();
+            let value_string = String::from_utf8(Self::trim_value(value_bytes)).map_err(|er| {
+                FitsHeaderError::DeserializationError {
+                    found: er.into_bytes(),
+                    intent: String::from("header card comment"),
+                }
+            })?;
+            let value = Rc::new(value_string);
+            let ret = Rc::clone(&value);
+            self.comment = Some(value);
+
+            Ok(ret)
+        } else {
+            Ok(Default::default())
         }
     }
 
@@ -315,6 +387,9 @@ impl From<[u8; 80]> for FitsHeaderCard {
 /// let simple_keyword = FitsHeaderKeyword::from(*b"SIMPLE  ");
 /// assert!(simple_keyword == "SIMPLE");
 /// assert!(simple_keyword == *b"SIMPLE  ");
+///
+/// assert!(simple_keyword != "BITPIX");
+/// assert!(simple_keyword != *b"BITPIX  ");
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct FitsHeaderKeyword {
@@ -385,12 +460,12 @@ impl FitsHeaderValue for u16 {
                 found: er.into_bytes(),
                 intent: String::from("header card u16 value"),
             })?;
-        Ok(u16::from_str_radix(value_string.as_str(), 10).map_err(|_| {
-            FitsHeaderError::DeserializationError {
+        value_string
+            .parse()
+            .map_err(|_| FitsHeaderError::DeserializationError {
                 found: value_string.into_bytes(),
                 intent: String::from("header card u16 value"),
-            }
-        })?)
+            })
     }
 
     fn to_bytes(self) -> Vec<u8> {
@@ -405,12 +480,12 @@ impl FitsHeaderValue for u32 {
                 found: er.into_bytes(),
                 intent: String::from("header card u32 value"),
             })?;
-        Ok(u32::from_str_radix(value_string.as_str(), 10).map_err(|_| {
-            FitsHeaderError::DeserializationError {
+        value_string
+            .parse()
+            .map_err(|_| FitsHeaderError::DeserializationError {
                 found: value_string.into_bytes(),
                 intent: String::from("header card u32 value"),
-            }
-        })?)
+            })
     }
 
     fn to_bytes(self) -> Vec<u8> {
@@ -420,12 +495,10 @@ impl FitsHeaderValue for u32 {
 
 impl FitsHeaderValue for String {
     fn from_bytes(raw: Vec<u8>) -> Result<Self, FitsHeaderError> {
-        Ok(
-            String::from_utf8(raw).map_err(|er| FitsHeaderError::DeserializationError {
-                found: er.into_bytes(),
-                intent: String::from("header card u16 value"),
-            })?,
-        )
+        String::from_utf8(raw).map_err(|er| FitsHeaderError::DeserializationError {
+            found: er.into_bytes(),
+            intent: String::from("header card u16 value"),
+        })
     }
 
     fn to_bytes(self) -> Vec<u8> {
@@ -481,3 +554,11 @@ impl FitsHeaderValue for Bitpix {
         }
     }
 }
+
+pub trait FitsDataCollection: Debug {}
+
+impl FitsDataCollection for Vec<u8> {}
+impl FitsDataCollection for Vec<i16> {}
+impl FitsDataCollection for Vec<i32> {}
+impl FitsDataCollection for Vec<f32> {}
+impl FitsDataCollection for Vec<f64> {}
