@@ -78,13 +78,15 @@ impl HduList {
                 }
                 if end_found {
                     // drain padding to reach data
+                    let mut match_index = raw.len();
                     for (index, b) in raw.iter().enumerate() {
                         if *b != b' ' {
-                            if index != 0 {
-                                raw.drain(0..index);
-                            }
+                            match_index = index;
                             break;
                         }
+                    }
+                    if match_index != 0 {
+                        raw.drain(0..match_index);
                     }
                     break;
                 }
@@ -145,7 +147,7 @@ impl HduList {
                                 data.push(f32::from_be_bytes(chunk.try_into().unwrap()));
                             }
                             hdus.push(Hdu::new(header, data));
-                        },
+                        }
                         Bitpix::F64 => {
                             let mut data = Vec::with_capacity(data_raw.len() / 8);
                             for chunk in data_raw.chunks_exact(8) {
@@ -156,13 +158,18 @@ impl HduList {
                     }
 
                     // drain padding to reach next header
-                    while let Some(b) = raw.first() {
+                    let mut match_index = raw.len();
+                    for (index, b) in raw.iter().enumerate() {
                         match *b {
-                            0 | b' ' => {
-                                raw.remove(0);
+                            0 | b' ' => (),
+                            _ => {
+                                match_index = index;
+                                break;
                             }
-                            _ => break,
                         }
+                    }
+                    if match_index != 0 {
+                        raw.drain(0..match_index);
                     }
                 }
             }
