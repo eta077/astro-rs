@@ -259,7 +259,7 @@ impl FitsHeaderCard {
                 .raw
                 .iter()
                 .position(|b| *b == b'/')
-                .unwrap_or_else(|| self.raw.len());
+                .unwrap_or(self.raw.len());
             let value_bytes = self
                 .raw
                 .drain(value_start_index..comment_start_index)
@@ -385,12 +385,12 @@ impl FitsHeaderValue for u16 {
                 found: er.into_bytes(),
                 intent: String::from("header card u16 value"),
             })?;
-        Ok(u16::from_str_radix(value_string.as_str(), 10).map_err(|_| {
-            FitsHeaderError::DeserializationError {
+        value_string
+            .parse()
+            .map_err(|_| FitsHeaderError::DeserializationError {
                 found: value_string.into_bytes(),
                 intent: String::from("header card u16 value"),
-            }
-        })?)
+            })
     }
 
     fn to_bytes(self) -> Vec<u8> {
@@ -405,12 +405,12 @@ impl FitsHeaderValue for u32 {
                 found: er.into_bytes(),
                 intent: String::from("header card u32 value"),
             })?;
-        Ok(u32::from_str_radix(value_string.as_str(), 10).map_err(|_| {
-            FitsHeaderError::DeserializationError {
+        value_string
+            .parse()
+            .map_err(|_| FitsHeaderError::DeserializationError {
                 found: value_string.into_bytes(),
                 intent: String::from("header card u32 value"),
-            }
-        })?)
+            })
     }
 
     fn to_bytes(self) -> Vec<u8> {
@@ -420,12 +420,10 @@ impl FitsHeaderValue for u32 {
 
 impl FitsHeaderValue for String {
     fn from_bytes(raw: Vec<u8>) -> Result<Self, FitsHeaderError> {
-        Ok(
-            String::from_utf8(raw).map_err(|er| FitsHeaderError::DeserializationError {
-                found: er.into_bytes(),
-                intent: String::from("header card u16 value"),
-            })?,
-        )
+        String::from_utf8(raw).map_err(|er| FitsHeaderError::DeserializationError {
+            found: er.into_bytes(),
+            intent: String::from("header card u16 value"),
+        })
     }
 
     fn to_bytes(self) -> Vec<u8> {
