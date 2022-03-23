@@ -78,12 +78,12 @@ impl HduList {
                 }
                 if end_found {
                     // drain padding to reach data
-                    while let Some(b) = raw.first() {
-                        match *b {
-                            b' ' => {
-                                raw.remove(0);
+                    for (index, b) in raw.iter().enumerate() {
+                        if *b != b' ' {
+                            if index != 0 {
+                                raw.drain(0..index);
                             }
-                            _ => break,
+                            break;
                         }
                     }
                     break;
@@ -94,19 +94,18 @@ impl HduList {
             }
 
             let mut header = FitsHeader::from_bytes(header_raw)?;
-            let mut data = Vec::new();
 
             let naxis = *header
                 .get_card(NAXIS_KEYWORD)
                 .and_then(|card| card.get_value::<u16>().ok())
                 .unwrap_or_default();
-            if naxis > 0 {
-                let bitpix = header
+            if naxis == 0 {
+                hdus.push(Hdu::new(header, Vec::<u8>::new()));
+            } else {
+                if let Some(bitpix) = header
                     .get_card(BITPIX_KEYWORD)
                     .and_then(|card| card.get_value::<Bitpix>().ok())
-                    .map(|bitpix| bitpix.value())
-                    .unwrap_or_default();
-                if bitpix > 0 {
+                {
                     let mut data_len = 1;
                     for x in 1..=naxis {
                         let mut naxisx_keyword = NAXIS_KEYWORD;
@@ -121,8 +120,41 @@ impl HduList {
                             .unwrap_or_default() as usize;
                         data_len *= naxisx;
                     }
-                    data_len *= bitpix / 8;
-                    data = raw.drain(0..data_len.clamp(data_len, raw.len())).collect();
+                    data_len *= bitpix.value() / 8;
+                    let data_raw: Vec<u8> =
+                        raw.drain(0..data_len.clamp(data_len, raw.len())).collect();
+                    match *bitpix {
+                        Bitpix::U8 => hdus.push(Hdu::new(header, data_raw)),
+                        Bitpix::I16 => {
+                            let mut data = Vec::with_capacity(data_raw.len() / 2);
+                            for chunk in data_raw.chunks_exact(2) {
+                                data.push(i16::from_be_bytes(chunk.try_into().unwrap()));
+                            }
+                            hdus.push(Hdu::new(header, data));
+                        }
+                        Bitpix::I32 => {
+                            let mut data = Vec::with_capacity(data_raw.len() / 4);
+                            for chunk in data_raw.chunks_exact(4) {
+                                data.push(i32::from_be_bytes(chunk.try_into().unwrap()));
+                            }
+                            hdus.push(Hdu::new(header, data));
+                        }
+                        Bitpix::F32 => {
+                            let mut data = Vec::with_capacity(data_raw.len() / 4);
+                            for chunk in data_raw.chunks_exact(4) {
+                                data.push(f32::from_be_bytes(chunk.try_into().unwrap()));
+                            }
+                            hdus.push(Hdu::new(header, data));
+                        },
+                        Bitpix::F64 => {
+                            let mut data = Vec::with_capacity(data_raw.len() / 8);
+                            for chunk in data_raw.chunks_exact(8) {
+                                data.push(f64::from_be_bytes(chunk.try_into().unwrap()));
+                            }
+                            hdus.push(Hdu::new(header, data));
+                        }
+                    }
+
                     // drain padding to reach next header
                     while let Some(b) = raw.first() {
                         match *b {
@@ -134,7 +166,6 @@ impl HduList {
                     }
                 }
             }
-            hdus.push(Hdu { header, data });
         }
         Ok(HduList { hdus })
     }
@@ -160,16 +191,27 @@ impl HduList {
 }
 
 /// A representation of a Header Data Unit within a FITS file.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Hdu {
     pub header: FitsHeader,
-    data: Vec<u8>,
+    data: Rc<dyn FitsDataCollection>,
 }
 
 impl Hdu {
     /// Constructs an empty HDU.
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(header: FitsHeader, data: impl FitsDataCollection + 'static) -> Self {
+        Hdu {
+            header,
+            data: Rc::new(data),
+        }
+    }
+
+    pub fn get_data<T: FitsDataCollection>(&self) -> Rc<T> {
+        unsafe {
+            let ptr = Rc::into_raw(Rc::clone(&self.data));
+            let new_ptr: *const T = ptr.cast();
+            Rc::from_raw(new_ptr)
+        }
     }
 }
 
@@ -506,3 +548,11 @@ impl FitsHeaderValue for Bitpix {
         }
     }
 }
+
+pub trait FitsDataCollection: Debug {}
+
+impl FitsDataCollection for Vec<u8> {}
+impl FitsDataCollection for Vec<i16> {}
+impl FitsDataCollection for Vec<i32> {}
+impl FitsDataCollection for Vec<f32> {}
+impl FitsDataCollection for Vec<f64> {}
