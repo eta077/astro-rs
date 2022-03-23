@@ -1,33 +1,439 @@
-use std::collections::HashMap;
-use std::fmt::Display;
-use std::fs::File;
-use std::io::{BufReader, ErrorKind, Read};
+//! Provides tools to construct, serialize, and deserialize FITS files.
+
+use std::fmt::Debug;
+use std::rc::Rc;
 
 use thiserror::Error;
 
-const HDU_BLOCK_SIZE: usize = 2880;
-const CARD_LENGTH: usize = 80;
-pub const SIMPLE_KEYWORD: &str = "SIMPLE  ";
-pub const NAXIS_KEYWORD: &str = "NAXIS   ";
-pub const BITPIX_KEYWORD: &str = "BITPIX  ";
-pub const END_KEYWORD: &str = "END     ";
+/// The expected keyword for the first header card of the primary HDU.
+pub const SIMPLE_KEYWORD: [u8; 8] = *b"SIMPLE  ";
+/// The header keyword indicating the size of each value in the HDU data.
+pub const BITPIX_KEYWORD: [u8; 8] = *b"BITPIX  ";
+/// The header keyword indicating how many axes are present in the HDU data.
+pub const NAXIS_KEYWORD: [u8; 8] = *b"NAXIS   ";
+/// The header keyword indicating the end of the header section.
+pub const END_KEYWORD: [u8; 8] = *b"END     ";
+/// The expected keyword for the first header card of each HDU following the primary.
+pub const XTENSION_KEYWORD: [u8; 8] = *b"XTENSION";
 
-#[derive(Error, Debug)]
-pub enum FitsError {
-    #[error("file IO error")]
-    FileIoError(#[from] std::io::Error),
-    #[error("unexpected end of file - expected {expected} bytes for {intent}, found {found}")]
-    UnexpectedEof {
+const BLANK_KEYWORD: [u8; 8] = *b"        ";
+
+const HEADER_CARD_LEN: usize = 80;
+const HEADER_KEYWORD_LEN: usize = 8;
+
+#[derive(Debug, Error)]
+pub enum FitsHeaderError {
+    #[error("unexpected byte count - expected {expected} bytes for {intent}, found {found}")]
+    InvalidLength {
         expected: usize,
         found: usize,
         intent: String,
     },
     #[error("expected valid string for {intent}, found {found:?}")]
     DeserializationError { found: Vec<u8>, intent: String },
-    #[error("invalid signature - expected 'SIMPLE  =                    (T|F)', found {found:?}")]
-    InvalidSignature { found: FitsHeaderCard },
 }
 
+/// A representation of the entirety of a FITS file.
+#[derive(Debug, Default)]
+pub struct HduList {
+    pub hdus: Vec<Hdu>,
+}
+
+impl HduList {
+    /// Constructs an empty HduList.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Constructs an HduList from the given bytes.
+    pub fn from_bytes(mut raw: Vec<u8>) -> Result<HduList, FitsHeaderError> {
+        let mut hdus = Vec::new();
+
+        while !raw.is_empty() {
+            let mut header_raw = Vec::new();
+            let mut new_header_bytes = HduList::drain_header_bytes(&mut raw, hdus.len())?;
+            let mut cards_read = new_header_bytes.len() / HEADER_CARD_LEN;
+            header_raw.append(&mut new_header_bytes);
+
+            // search for the END keyword.
+            // this should be the last keyword in the header, so if something other than ' ' is found, stop searching
+            loop {
+                let mut end_found = false;
+                for card in 1..=cards_read {
+                    let card_index = header_raw.len() - card * HEADER_CARD_LEN;
+                    match header_raw[card_index..card_index + HEADER_KEYWORD_LEN]
+                        .try_into()
+                        .unwrap()
+                    {
+                        END_KEYWORD => {
+                            end_found = true;
+                            break;
+                        }
+                        BLANK_KEYWORD => continue,
+                        _ => {
+                            end_found = false;
+                            break;
+                        }
+                    }
+                }
+                if end_found {
+                    // drain padding to reach data
+                    while let Some(b) = raw.first() {
+                        match *b {
+                            b' ' => {
+                                raw.remove(0);
+                            }
+                            _ => break,
+                        }
+                    }
+                    break;
+                }
+                new_header_bytes = HduList::drain_header_bytes(&mut raw, hdus.len())?;
+                cards_read = new_header_bytes.len() / HEADER_CARD_LEN;
+                header_raw.append(&mut new_header_bytes);
+            }
+
+            let mut header = FitsHeader::from_bytes(header_raw)?;
+            let mut data = Vec::new();
+
+            let naxis = *header
+                .get_card_mut(NAXIS_KEYWORD)
+                .and_then(|card| card.get_value::<u16>().ok())
+                .unwrap_or_default();
+            if naxis > 0 {
+                let bitpix = header
+                    .get_card_mut(BITPIX_KEYWORD)
+                    .and_then(|card| card.get_value::<Bitpix>().ok())
+                    .map(|bitpix| bitpix.value())
+                    .unwrap_or_default();
+                if bitpix > 0 {
+                    let mut data_len = 1;
+                    for x in 1..=naxis {
+                        let mut naxisx_keyword = NAXIS_KEYWORD;
+                        let x_bytes = x.to_string().into_bytes();
+                        for (index, i) in x_bytes.iter().enumerate() {
+                            naxisx_keyword[index + 5] = *i;
+                        }
+
+                        let naxisx = *header
+                            .get_card_mut(naxisx_keyword)
+                            .and_then(|card| card.get_value::<u32>().ok())
+                            .unwrap_or_default() as usize;
+                        data_len *= naxisx;
+                    }
+                    data_len *= bitpix / 8;
+                    data = raw.drain(0..data_len.clamp(data_len, raw.len())).collect();
+                    // drain padding to reach next header
+                    while let Some(b) = raw.first() {
+                        match *b {
+                            0 | b' ' => {
+                                raw.remove(0);
+                            }
+                            _ => break,
+                        }
+                    }
+                }
+            }
+            hdus.push(Hdu { header, data });
+        }
+        Ok(HduList { hdus })
+    }
+
+    /// Validates the existence and format of the SIMPLE header card.
+    pub fn is_header_valid(&mut self) -> Result<bool, FitsHeaderError> {
+        Ok(true)
+    }
+
+    fn drain_header_bytes(raw: &mut Vec<u8>, hdu_num: usize) -> Result<Vec<u8>, FitsHeaderError> {
+        let raw_len = raw.len();
+        let block_len = if raw_len < HEADER_CARD_LEN {
+            return Err(FitsHeaderError::InvalidLength {
+                expected: HEADER_CARD_LEN,
+                found: raw_len,
+                intent: ["HDU ", &hdu_num.to_string(), " header"].concat(),
+            });
+        } else {
+            HEADER_CARD_LEN
+        };
+        Ok(raw.drain(0..block_len).collect())
+    }
+}
+
+/// A representation of a Header Data Unit within a FITS file.
+#[derive(Debug, Default)]
+pub struct Hdu {
+    pub header: FitsHeader,
+    data: Vec<u8>,
+}
+
+impl Hdu {
+    /// Constructs an empty HDU.
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+/// A representation of the header portion of an HDU.
+#[derive(Debug, Default)]
+pub struct FitsHeader {
+    cards: Vec<FitsHeaderCard>,
+}
+
+impl FitsHeader {
+    /// Constructs an empty header.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Constructs a FitsHeader from the given bytes.
+    pub fn from_bytes(mut raw: Vec<u8>) -> Result<FitsHeader, FitsHeaderError> {
+        let raw_len = raw.len();
+        let num_cards = raw_len / HEADER_CARD_LEN;
+        if raw_len % HEADER_CARD_LEN != 0 {
+            return Err(FitsHeaderError::InvalidLength {
+                expected: (num_cards + 1) * HEADER_CARD_LEN,
+                found: raw_len,
+                intent: String::from("FITS header"),
+            });
+        }
+
+        let mut cards = Vec::with_capacity(num_cards);
+        while !raw.is_empty() {
+            let card_vec = raw.drain(0..HEADER_CARD_LEN).collect::<Vec<u8>>();
+            let card_slice: [u8; 80] = card_vec[0..80].try_into().unwrap();
+            cards.push(FitsHeaderCard::from(card_slice));
+        }
+
+        Ok(FitsHeader { cards })
+    }
+
+    pub fn get_card<K>(&self, keyword: K) -> Option<&FitsHeaderCard>
+    where
+        FitsHeaderKeyword: PartialEq<K>,
+    {
+        for card in &self.cards {
+            if card.keyword == keyword {
+                return Some(card);
+            }
+        }
+        None
+    }
+
+    pub fn get_card_mut<K>(&mut self, keyword: K) -> Option<&mut FitsHeaderCard>
+    where
+        FitsHeaderKeyword: PartialEq<K>,
+    {
+        for card in self.cards.iter_mut() {
+            if card.keyword == keyword {
+                return Some(card);
+            }
+        }
+        None
+    }
+}
+
+#[derive(Debug)]
+pub struct FitsHeaderCard {
+    raw: Vec<u8>,
+    keyword: FitsHeaderKeyword,
+    value: Option<Rc<dyn FitsHeaderValue>>,
+    comment: Option<String>,
+}
+
+impl FitsHeaderCard {
+    pub fn get_value<T: FitsHeaderValue + 'static>(&mut self) -> Result<Rc<T>, FitsHeaderError> {
+        if let Some(data) = &self.value {
+            unsafe {
+                let ptr = Rc::into_raw(Rc::clone(data));
+                let new_ptr: *const T = ptr.cast();
+                Ok(Rc::from_raw(new_ptr))
+            }
+        } else {
+            let value_start_index = self
+                .raw
+                .iter()
+                .position(|b| *b == b'=')
+                .map(|index| index + 1)
+                .unwrap_or(0);
+            let comment_start_index = self
+                .raw
+                .iter()
+                .position(|b| *b == b'/')
+                .unwrap_or_else(|| self.raw.len());
+            let value_bytes = self
+                .raw
+                .drain(value_start_index..comment_start_index)
+                .collect();
+
+            let data = Rc::new(T::from_bytes(Self::trim_value(value_bytes))?);
+            let ret = Rc::clone(&data);
+            self.value = Some(data);
+            Ok(ret)
+        }
+    }
+
+    fn trim_value(value: Vec<u8>) -> Vec<u8> {
+        let mut index1 = 0;
+        let mut index2 = value.len();
+        for b in value.iter() {
+            match *b {
+                b' ' => index1 += 1,
+                _ => break,
+            }
+        }
+        if index1 == value.len() {
+            return Vec::new();
+        }
+        for b in value.iter().rev() {
+            match *b {
+                b' ' => index2 -= 1,
+                _ => break,
+            }
+        }
+        value[index1..index2].to_vec()
+    }
+}
+
+impl From<[u8; 80]> for FitsHeaderCard {
+    fn from(raw: [u8; 80]) -> Self {
+        let keyword_bytes: [u8; 8] = raw[0..8].try_into().unwrap();
+        let keyword = FitsHeaderKeyword::from(keyword_bytes);
+        FitsHeaderCard {
+            raw: raw[8..].to_vec(),
+            keyword,
+            value: None,
+            comment: None,
+        }
+    }
+}
+
+/// A representation of a FITS header keyword.
+///
+/// ```
+/// use astro_rs::fits::FitsHeaderKeyword;
+///
+/// let simple_keyword = FitsHeaderKeyword::from(*b"SIMPLE  ");
+/// assert!(simple_keyword == "SIMPLE");
+/// assert!(simple_keyword == *b"SIMPLE  ");
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct FitsHeaderKeyword {
+    raw: [u8; 8],
+}
+
+impl From<[u8; 8]> for FitsHeaderKeyword {
+    fn from(raw: [u8; 8]) -> Self {
+        FitsHeaderKeyword { raw }
+    }
+}
+
+impl PartialEq<&str> for FitsHeaderKeyword {
+    fn eq(&self, other: &&str) -> bool {
+        if other.len() > HEADER_KEYWORD_LEN {
+            return false;
+        }
+        let other_bytes = other.as_bytes();
+        for (index, b) in self.raw.iter().enumerate() {
+            if b != other_bytes.get(index).unwrap_or(&b' ') {
+                return false;
+            }
+        }
+
+        true
+    }
+}
+
+impl PartialEq<[u8; 8]> for FitsHeaderKeyword {
+    fn eq(&self, other: &[u8; 8]) -> bool {
+        self.raw == *other
+    }
+}
+
+/// A trait that allows data to be serialized/deserialized as a FITS header value.
+pub trait FitsHeaderValue: Debug {
+    /// Attempts to deserialize a value from the given bytes. The given bytes shall not be padded by spaces.
+    fn from_bytes(raw: Vec<u8>) -> Result<Self, FitsHeaderError>
+    where
+        Self: Sized;
+
+    /// Serializes the value to bytes. The bytes shall not include padding spaces.
+    fn to_bytes(self) -> Vec<u8>;
+}
+
+impl FitsHeaderValue for u8 {
+    fn from_bytes(raw: Vec<u8>) -> Result<Self, FitsHeaderError> {
+        if raw.len() == 1 {
+            Ok(*raw.first().unwrap() - 48)
+        } else {
+            Err(FitsHeaderError::InvalidLength {
+                expected: 1,
+                found: raw.len(),
+                intent: String::from("header card u8 value"),
+            })
+        }
+    }
+
+    fn to_bytes(self) -> Vec<u8> {
+        vec![self + 48]
+    }
+}
+
+impl FitsHeaderValue for u16 {
+    fn from_bytes(raw: Vec<u8>) -> Result<Self, FitsHeaderError> {
+        let value_string =
+            String::from_utf8(raw).map_err(|er| FitsHeaderError::DeserializationError {
+                found: er.into_bytes(),
+                intent: String::from("header card u16 value"),
+            })?;
+        Ok(u16::from_str_radix(value_string.as_str(), 10).map_err(|_| {
+            FitsHeaderError::DeserializationError {
+                found: value_string.into_bytes(),
+                intent: String::from("header card u16 value"),
+            }
+        })?)
+    }
+
+    fn to_bytes(self) -> Vec<u8> {
+        self.to_string().into_bytes()
+    }
+}
+
+impl FitsHeaderValue for u32 {
+    fn from_bytes(raw: Vec<u8>) -> Result<Self, FitsHeaderError> {
+        let value_string =
+            String::from_utf8(raw).map_err(|er| FitsHeaderError::DeserializationError {
+                found: er.into_bytes(),
+                intent: String::from("header card u32 value"),
+            })?;
+        Ok(u32::from_str_radix(value_string.as_str(), 10).map_err(|_| {
+            FitsHeaderError::DeserializationError {
+                found: value_string.into_bytes(),
+                intent: String::from("header card u32 value"),
+            }
+        })?)
+    }
+
+    fn to_bytes(self) -> Vec<u8> {
+        self.to_string().into_bytes()
+    }
+}
+
+impl FitsHeaderValue for String {
+    fn from_bytes(raw: Vec<u8>) -> Result<Self, FitsHeaderError> {
+        Ok(
+            String::from_utf8(raw).map_err(|er| FitsHeaderError::DeserializationError {
+                found: er.into_bytes(),
+                intent: String::from("header card u16 value"),
+            })?,
+        )
+    }
+
+    fn to_bytes(self) -> Vec<u8> {
+        self.into_bytes()
+    }
+}
+
+/// An enumeration of valid values corresponding to the BITPIX keyword.
 #[derive(Debug, Clone, Copy)]
 pub enum Bitpix {
     U8,
@@ -38,6 +444,7 @@ pub enum Bitpix {
 }
 
 impl Bitpix {
+    /// Gets the number of bits that represent a value in the data section of the HDU.
     pub fn value(&self) -> usize {
         match self {
             Bitpix::U8 => 8,
@@ -49,345 +456,28 @@ impl Bitpix {
     }
 }
 
-impl TryFrom<String> for Bitpix {
-    type Error = FitsError;
-
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        match value.as_str() {
-            "8" => Ok(Bitpix::U8),
-            "16" => Ok(Bitpix::I16),
-            "32" => Ok(Bitpix::I32),
-            "-32" => Ok(Bitpix::F32),
-            "-64" => Ok(Bitpix::F64),
-            _ => Err(FitsError::DeserializationError {
-                found: value.into_bytes(),
-                intent: String::from("BITPIX value"),
+impl FitsHeaderValue for Bitpix {
+    fn from_bytes(raw: Vec<u8>) -> Result<Self, FitsHeaderError> {
+        match raw.as_slice() {
+            b"8" => Ok(Bitpix::U8),
+            b"16" => Ok(Bitpix::I16),
+            b"32" => Ok(Bitpix::I32),
+            b"-32" => Ok(Bitpix::F32),
+            b"-64" => Ok(Bitpix::F64),
+            _ => Err(FitsHeaderError::DeserializationError {
+                found: raw,
+                intent: String::from("header card bitpix value"),
             }),
         }
     }
-}
 
-impl Display for Bitpix {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let value = match self {
-            Bitpix::U8 => "8",
-            Bitpix::I16 => "16",
-            Bitpix::I32 => "32",
-            Bitpix::F32 => "-32",
-            Bitpix::F64 => "-64",
-        };
-        write!(f, "{}", value)
-    }
-}
-
-#[derive(Debug)]
-pub enum FitsData {
-    Raw(Vec<u8>),
-    Bool(bool),
-    String(String),
-    U16(u16),
-    Bitpix(Bitpix),
-}
-
-impl FitsData {
-    pub fn to_bytes(&self) -> Vec<u8> {
+    fn to_bytes(self) -> Vec<u8> {
         match self {
-            FitsData::Raw(value) => value.to_vec(),
-            FitsData::Bool(value) => {
-                if *value {
-                    vec![b'T']
-                } else {
-                    vec![b'F']
-                }
-            }
-            FitsData::String(value) => value.to_owned().into_bytes(),
-            FitsData::U16(value) => value.to_string().into_bytes(),
-            FitsData::Bitpix(value) => value.to_string().into_bytes(),
+            Bitpix::U8 => b"8".to_vec(),
+            Bitpix::I16 => b"16".to_vec(),
+            Bitpix::I32 => b"32".to_vec(),
+            Bitpix::F32 => b"-32".to_vec(),
+            Bitpix::F64 => b"-64".to_vec(),
         }
     }
-}
-
-#[derive(Debug)]
-pub struct FitsHeaderCard {
-    pub keyword: String,
-    data: FitsData,
-    pub comment: Vec<u8>,
-}
-
-impl FitsHeaderCard {
-    pub fn get_bool_data(&mut self) -> Result<bool, FitsError> {
-        match &self.data {
-            FitsData::Raw(bytes) => {
-                if let Some(value) = bytes.first() {
-                    match *value {
-                        b'T' => {
-                            self.data = FitsData::Bool(true);
-                            Ok(true)
-                        }
-                        b'F' => {
-                            self.data = FitsData::Bool(false);
-                            Ok(false)
-                        }
-                        _ => Err(FitsError::DeserializationError {
-                            found: bytes.to_owned(),
-                            intent: String::from("header card bool data"),
-                        }),
-                    }
-                } else {
-                    Err(FitsError::DeserializationError {
-                        found: bytes.to_owned(),
-                        intent: String::from("header card bool data"),
-                    })
-                }
-            }
-            FitsData::Bool(value) => Ok(*value),
-            _ => Err(FitsError::DeserializationError {
-                found: self.data.to_bytes(),
-                intent: String::from("header card bool data"),
-            }),
-        }
-    }
-
-    pub fn get_u16_data(&mut self) -> Result<u16, FitsError> {
-        match &self.data {
-            FitsData::Raw(bytes) => {
-                let value_string = String::from_utf8(bytes.to_owned()).map_err(|er| {
-                    FitsError::DeserializationError {
-                        found: er.into_bytes(),
-                        intent: String::from("header card u16 data"),
-                    }
-                })?;
-                let value = u16::from_str_radix(value_string.as_str(), 10).map_err(|_| {
-                    FitsError::DeserializationError {
-                        found: value_string.into_bytes(),
-                        intent: String::from("header card u16 data"),
-                    }
-                })?;
-                self.data = FitsData::U16(value);
-                Ok(value)
-            }
-            FitsData::U16(value) => Ok(*value),
-            _ => Err(FitsError::DeserializationError {
-                found: self.data.to_bytes(),
-                intent: String::from("header card u16 data"),
-            }),
-        }
-    }
-
-    pub fn get_bitpix_data(&mut self) -> Result<Bitpix, FitsError> {
-        match &self.data {
-            FitsData::Raw(bytes) => {
-                let value_string = String::from_utf8(bytes.to_owned()).map_err(|er| {
-                    FitsError::DeserializationError {
-                        found: er.into_bytes(),
-                        intent: String::from("header card u16 data"),
-                    }
-                })?;
-                let value = Bitpix::try_from(value_string)?;
-                self.data = FitsData::Bitpix(value);
-                Ok(value)
-            }
-            FitsData::Bitpix(value) => Ok(*value),
-            _ => Err(FitsError::DeserializationError {
-                found: self.data.to_bytes(),
-                intent: String::from("header card bitpix data"),
-            }),
-        }
-    }
-}
-
-#[derive(Debug, Default)]
-pub struct FitsHeader {
-    pub cards: HashMap<String, FitsHeaderCard>,
-}
-
-impl FitsHeader {
-    pub fn new() -> Self {
-        Self::default()
-    }
-}
-
-#[derive(Debug)]
-pub struct Hdu {
-    pub header: FitsHeader,
-    pub data: Vec<u8>,
-}
-
-#[derive(Debug)]
-pub struct HduList {
-    pub hdus: Vec<Hdu>,
-}
-
-pub fn read_fits_file(file: File, mut check_signature: bool) -> Result<HduList, FitsError> {
-    let mut file_reader = BufReader::new(file);
-
-    let mut hdus = Vec::new();
-    loop {
-        let mut hdu_bytes = read_hdu_bytes(&mut file_reader, hdus.is_empty())?;
-        if hdu_bytes.is_empty() {
-            break;
-        }
-        let mut header = FitsHeader::new();
-
-        let mut signature_card = read_next_header_card(&mut hdu_bytes)?;
-        if check_signature {
-            let signature_matches = if signature_card.keyword == SIMPLE_KEYWORD {
-                signature_card.get_bool_data().is_ok()
-            } else {
-                false
-            };
-            if !signature_matches {
-                return Err(FitsError::InvalidSignature {
-                    found: signature_card,
-                });
-            }
-            check_signature = false;
-        }
-        header
-            .cards
-            .insert(signature_card.keyword.clone(), signature_card);
-
-        loop {
-            let card = read_next_header_card(&mut hdu_bytes)?;
-            if card.keyword == END_KEYWORD {
-                header.cards.insert(card.keyword.clone(), card);
-                break;
-            }
-            header.cards.insert(card.keyword.clone(), card);
-
-            if hdu_bytes.is_empty() {
-                hdu_bytes = read_hdu_bytes(&mut file_reader, hdus.is_empty())?;
-            }
-        }
-        let mut data = Vec::new();
-        let naxis = header
-            .cards
-            .get_mut(NAXIS_KEYWORD)
-            .and_then(|card| card.get_u16_data().ok())
-            .unwrap_or_default() as u8;
-        if naxis > 0 {
-            let bitpix = header
-                .cards
-                .get_mut(BITPIX_KEYWORD)
-                .and_then(|card| card.get_bitpix_data().ok())
-                .map(|bitpix| bitpix.value())
-                .unwrap_or_default();
-            if bitpix > 0 {
-                let mut data_len = 1;
-                for x in 1..=naxis {
-                    let mut naxisx_keyword = NAXIS_KEYWORD.to_owned();
-                    unsafe {
-                        let naxisx_keyword_bytes = naxisx_keyword.as_bytes_mut();
-                        naxisx_keyword_bytes[5] = x + 48;
-                    }
-                    let naxisx = header
-                        .cards
-                        .get_mut(&naxisx_keyword)
-                        .and_then(|card| card.get_u16_data().ok())
-                        .unwrap_or_default() as usize;
-                    data_len *= naxisx;
-                }
-                data_len *= bitpix / 8;
-                data = vec![0; data_len];
-                // ignore error if not able to read exact
-                let _ = file_reader.read_exact(&mut data);
-            }
-        }
-
-        let hdu = Hdu { header, data };
-
-        hdus.push(hdu);
-    }
-
-    Ok(HduList { hdus })
-}
-
-fn read_hdu_bytes(
-    file_reader: &mut BufReader<File>,
-    first_hdu: bool,
-) -> Result<Vec<u8>, FitsError> {
-    let mut hdu_bytes = [0; HDU_BLOCK_SIZE];
-    if let Err(er) = file_reader.read_exact(&mut hdu_bytes) {
-        if first_hdu {
-            if er.kind() == ErrorKind::UnexpectedEof {
-                return Err(FitsError::UnexpectedEof {
-                    expected: HDU_BLOCK_SIZE,
-                    found: hdu_bytes.len(),
-                    intent: String::from("HDU 0"),
-                });
-            } else {
-                return Err(FitsError::FileIoError(er));
-            }
-        } else {
-            return Ok(Vec::new());
-        }
-    };
-    Ok(hdu_bytes.to_vec())
-}
-
-fn read_next_header_card(hdu_bytes: &mut Vec<u8>) -> Result<FitsHeaderCard, FitsError> {
-    if hdu_bytes.len() < CARD_LENGTH {
-        return Err(FitsError::UnexpectedEof {
-            expected: CARD_LENGTH,
-            found: hdu_bytes.len(),
-            intent: String::from("header card"),
-        });
-    }
-    let mut card_bytes = hdu_bytes.drain(0..CARD_LENGTH).collect::<Vec<u8>>();
-
-    let keyword_bytes = card_bytes.drain(0..8).collect();
-    let keyword =
-        String::from_utf8(keyword_bytes).map_err(|er| FitsError::DeserializationError {
-            found: er.into_bytes(),
-            intent: String::from("header card keyword"),
-        })?;
-
-    let mut data = Vec::new();
-    let mut comment = Vec::new();
-    if keyword != END_KEYWORD {
-        let mut value = Vec::with_capacity(72);
-        for (index, b) in card_bytes.iter().enumerate().rev() {
-            match *b {
-                b'/' => {
-                    comment = trim_value(&mut value);
-                    value = Vec::with_capacity(index);
-                }
-                b'=' => {
-                    data = trim_value(&mut value);
-                    value = Vec::new();
-                }
-                _ => value.insert(0, *b),
-            }
-        }
-        if data.is_empty() {
-            data = value.clone();
-        }
-    }
-
-    Ok(FitsHeaderCard {
-        keyword,
-        data: FitsData::Raw(data),
-        comment,
-    })
-}
-
-fn trim_value(value: &mut Vec<u8>) -> Vec<u8> {
-    let mut index1 = 0;
-    let mut index2 = value.len();
-    for b in value.iter() {
-        match *b {
-            b' ' | 0 => index1 += 1,
-            _ => break,
-        }
-    }
-    if index1 == value.len() {
-        return Vec::new();
-    }
-    for b in value.iter().rev() {
-        match *b {
-            b' ' | 0 => index2 -= 1,
-            _ => break,
-        }
-    }
-    value[index1..index2].to_vec()
 }
