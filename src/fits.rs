@@ -97,12 +97,12 @@ impl HduList {
             let mut data = Vec::new();
 
             let naxis = *header
-                .get_card_mut(NAXIS_KEYWORD)
+                .get_card(NAXIS_KEYWORD)
                 .and_then(|card| card.get_value::<u16>().ok())
                 .unwrap_or_default();
             if naxis > 0 {
                 let bitpix = header
-                    .get_card_mut(BITPIX_KEYWORD)
+                    .get_card(BITPIX_KEYWORD)
                     .and_then(|card| card.get_value::<Bitpix>().ok())
                     .map(|bitpix| bitpix.value())
                     .unwrap_or_default();
@@ -116,7 +116,7 @@ impl HduList {
                         }
 
                         let naxisx = *header
-                            .get_card_mut(naxisx_keyword)
+                            .get_card(naxisx_keyword)
                             .and_then(|card| card.get_value::<u32>().ok())
                             .unwrap_or_default() as usize;
                         data_len *= naxisx;
@@ -207,19 +207,8 @@ impl FitsHeader {
         Ok(FitsHeader { cards })
     }
 
-    pub fn get_card<K>(&self, keyword: K) -> Option<&FitsHeaderCard>
-    where
-        FitsHeaderKeyword: PartialEq<K>,
-    {
-        for card in &self.cards {
-            if card.keyword == keyword {
-                return Some(card);
-            }
-        }
-        None
-    }
-
-    pub fn get_card_mut<K>(&mut self, keyword: K) -> Option<&mut FitsHeaderCard>
+    /// Searches the header cards for a match with the given keyword.
+    pub fn get_card<K>(&mut self, keyword: K) -> Option<&mut FitsHeaderCard>
     where
         FitsHeaderKeyword: PartialEq<K>,
     {
@@ -237,7 +226,7 @@ pub struct FitsHeaderCard {
     raw: Vec<u8>,
     keyword: FitsHeaderKeyword,
     value: Option<Rc<dyn FitsHeaderValue>>,
-    comment: Option<String>,
+    comment: Option<Rc<String>>,
 }
 
 impl FitsHeaderCard {
@@ -269,6 +258,41 @@ impl FitsHeaderCard {
             let ret = Rc::clone(&data);
             self.value = Some(data);
             Ok(ret)
+        }
+    }
+
+    /// Gets the comment section of the header card.
+    ///
+    /// ```
+    /// use astro_rs::fits::FitsHeaderCard;
+    ///
+    /// let mut card = FitsHeaderCard::from(*b"SIMPLE  =                    T / FITS STANDARD                                  ");
+    /// assert_eq!(*card.get_comment()?, String::from("FITS STANDARD"));
+    /// # Ok::<(), astro_rs::fits::FitsHeaderError>(())
+    /// ```
+    pub fn get_comment(&mut self) -> Result<Rc<String>, FitsHeaderError> {
+        if let Some(data) = &self.comment {
+            Ok(Rc::clone(data))
+        } else if let Some(comment_start_index) = self
+            .raw
+            .iter()
+            .position(|b| *b == b'/')
+            .map(|index| index + 1)
+        {
+            let value_bytes = self.raw.drain(comment_start_index..).collect();
+            let value_string = String::from_utf8(Self::trim_value(value_bytes)).map_err(|er| {
+                FitsHeaderError::DeserializationError {
+                    found: er.into_bytes(),
+                    intent: String::from("header card comment"),
+                }
+            })?;
+            let value = Rc::new(value_string);
+            let ret = Rc::clone(&value);
+            self.comment = Some(value);
+
+            Ok(ret)
+        } else {
+            Ok(Default::default())
         }
     }
 
@@ -315,6 +339,9 @@ impl From<[u8; 80]> for FitsHeaderCard {
 /// let simple_keyword = FitsHeaderKeyword::from(*b"SIMPLE  ");
 /// assert!(simple_keyword == "SIMPLE");
 /// assert!(simple_keyword == *b"SIMPLE  ");
+///
+/// assert!(simple_keyword != "BITPIX");
+/// assert!(simple_keyword != *b"BITPIX  ");
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct FitsHeaderKeyword {
