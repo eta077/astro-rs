@@ -168,12 +168,12 @@ impl From<[u8; 80]> for FitsHeaderCard {
     }
 }
 
-impl Into<[u8; 80]> for FitsHeaderCard {
-    fn into(self) -> [u8; 80] {
+impl From<FitsHeaderCard> for [u8; 80] {
+    fn from(card: FitsHeaderCard) -> Self {
         let mut result = [0; 80];
-        let keyword_raw: [u8; 8] = self.keyword.into();
+        let keyword_raw: [u8; 8] = card.keyword.into();
         result[0..8].copy_from_slice(&keyword_raw);
-        let value_raw: [u8; 72] = self.value.into();
+        let value_raw: [u8; 72] = card.value.into();
         result[8..80].copy_from_slice(&value_raw);
 
         result
@@ -203,9 +203,9 @@ impl From<[u8; 8]> for FitsHeaderKeyword {
     }
 }
 
-impl Into<[u8; 8]> for FitsHeaderKeyword {
-    fn into(self) -> [u8; 8] {
-        self.raw
+impl From<FitsHeaderKeyword> for [u8; 8] {
+    fn from(keyword: FitsHeaderKeyword) -> Self {
+        keyword.raw
     }
 }
 
@@ -330,9 +330,9 @@ impl From<[u8; 72]> for FitsHeaderValueContainer {
     }
 }
 
-impl Into<[u8; 72]> for FitsHeaderValueContainer {
-    fn into(self) -> [u8; 72] {
-        match (self.value, self.comment) {
+impl From<FitsHeaderValueContainer> for [u8; 72] {
+    fn from(container: FitsHeaderValueContainer) -> Self {
+        match (container.value, container.comment) {
             (Some(value), Some(comment)) => {
                 let mut result = [b' '; 72];
                 result[0] = b'=';
@@ -351,14 +351,14 @@ impl Into<[u8; 72]> for FitsHeaderValueContainer {
                 result[0] = b'=';
                 result[2..72].copy_from_slice(&value.to_bytes());
                 let comment_start = result.iter().rposition(|b| *b != b' ').unwrap_or_default() + 2;
-                let comment_raw = self.raw.as_slice();
+                let comment_raw = container.raw.as_slice();
                 result[comment_start..comment_start + comment_raw.len()]
                     .copy_from_slice(comment_raw);
                 result
             }
             (None, Some(comment)) => {
                 let mut result = [b' '; 72];
-                let value_raw = self.raw.as_slice();
+                let value_raw = container.raw.as_slice();
                 let mut comment_start = value_raw.len();
                 result[0..comment_start].copy_from_slice(value_raw);
 
@@ -370,7 +370,7 @@ impl Into<[u8; 72]> for FitsHeaderValueContainer {
                 result
             }
             (None, None) => {
-                let result: [u8; 72] = self.raw[0..72].try_into().unwrap();
+                let result: [u8; 72] = container.raw[0..72].try_into().unwrap();
                 result
             }
         }
