@@ -7,6 +7,11 @@ description = "Astronomy utils"
 repository = "https://github.com/eta077/astro-rs"
 readme = "README.md"
 
+exclude = [
+    ".github",
+    "tests" 
+]
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
