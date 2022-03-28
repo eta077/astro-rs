@@ -18,7 +18,7 @@ pub const END_KEYWORD: [u8; 8] = *b"END     ";
 /// The expected keyword for the first header card of each HDU following the primary.
 pub const XTENSION_KEYWORD: [u8; 8] = *b"XTENSION";
 
-pub(crate) const HEADER_BLOCK_LEN: usize = 2880;
+pub(crate) const FITS_RECORD_LEN: usize = 2880;
 pub(crate) const HEADER_CARD_LEN: usize = 80;
 pub(crate) const HEADER_KEYWORD_LEN: usize = 8;
 
@@ -122,7 +122,8 @@ impl FitsHeader {
 /// assert_eq!(*card.get_comment()?, String::from("FITS STANDARD"));
 ///
 /// // re-serialize the header card
-/// assert_eq!(card.into(), card_raw);
+/// let comparison: [u8; 80] = card.into();
+/// assert_eq!(comparison, card_raw);
 /// # Ok::<(), astro_rs::fits::FitsHeaderError>(())
 /// ```
 #[derive(Debug)]

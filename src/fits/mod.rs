@@ -56,17 +56,6 @@ impl HduList {
                     }
                 }
                 if end_found {
-                    // drain padding to reach data
-                    let mut match_index = raw.len();
-                    for (index, b) in raw.iter().enumerate() {
-                        if *b != b' ' {
-                            match_index = index;
-                            break;
-                        }
-                    }
-                    if match_index != 0 {
-                        raw.drain(0..match_index);
-                    }
                     break;
                 }
                 new_header_bytes = HduList::drain_header_bytes(&mut raw, hdus.len())?;
@@ -75,58 +64,44 @@ impl HduList {
             }
 
             let mut header = FitsHeader::from_bytes(header_raw)?;
+            let mut data_raw = Vec::new();
 
             let naxis = *header
                 .get_card(NAXIS_KEYWORD)
                 .and_then(|card| card.get_value::<u16>().ok())
                 .unwrap_or_default();
-            if naxis == 0 {
-                hdus.push(Hdu::new(header, Vec::<u8>::new()));
-            } else if let Some(bitpix) = header
-                .get_card(BITPIX_KEYWORD)
-                .and_then(|card| card.get_value::<Bitpix>().ok())
-            {
-                let mut data_len = 1;
-                for x in 1..=naxis {
-                    let mut naxisx_keyword = NAXIS_KEYWORD;
-                    let x_bytes = x.to_string().into_bytes();
-                    for (index, i) in x_bytes.iter().enumerate() {
-                        naxisx_keyword[index + 5] = *i;
-                    }
-
-                    let naxisx = *header
-                        .get_card(naxisx_keyword)
-                        .and_then(|card| card.get_value::<u32>().ok())
-                        .unwrap_or_default() as usize;
-                    data_len *= naxisx;
-                }
-                data_len *= bitpix.value() / 8;
-                let data_raw: Vec<u8> = raw.drain(0..data_len.clamp(data_len, raw.len())).collect();
-                match *bitpix {
-                    Bitpix::U8 => hdus.push(Hdu::new(header, data_raw)),
-                    Bitpix::I16 => hdus.push(Hdu::new(header, Vec::<i16>::from_bytes(data_raw)?)),
-                    Bitpix::I32 => hdus.push(Hdu::new(header, Vec::<i32>::from_bytes(data_raw)?)),
-                    Bitpix::F32 => hdus.push(Hdu::new(header, Vec::<f32>::from_bytes(data_raw)?)),
-                    Bitpix::F64 => hdus.push(Hdu::new(header, Vec::<f64>::from_bytes(data_raw)?)),
-                }
-
-                // drain padding to reach next header
-                let mut match_index = raw.len();
-                for (index, b) in raw.iter().enumerate() {
-                    match *b {
-                        0 | b' ' => (),
-                        _ => {
-                            match_index = index;
-                            break;
+            if naxis != 0 {
+                if let Some(bitpix) = header
+                    .get_card(BITPIX_KEYWORD)
+                    .and_then(|card| card.get_value::<Bitpix>().ok())
+                {
+                    let mut data_len = 1;
+                    for x in 1..=naxis {
+                        let mut naxisx_keyword = NAXIS_KEYWORD;
+                        let x_bytes = x.to_string().into_bytes();
+                        for (index, i) in x_bytes.iter().enumerate() {
+                            naxisx_keyword[index + 5] = *i;
                         }
+
+                        let naxisx = *header
+                            .get_card(naxisx_keyword)
+                            .and_then(|card| card.get_value::<u32>().ok())
+                            .unwrap_or_default() as usize;
+                        data_len *= naxisx;
                     }
+                    data_len *= bitpix.value() / 8;
+                    if data_len % FITS_RECORD_LEN != 0 {
+                        let num_records = (data_len / FITS_RECORD_LEN) + 1;
+                        data_len = num_records * FITS_RECORD_LEN;
+                    }
+                    data_raw = raw.drain(0..data_len.clamp(0, raw.len())).collect();
                 }
-                if match_index != 0 {
-                    raw.drain(0..match_index);
-                }
-            } else {
-                hdus.push(Hdu::new(header, Vec::<u8>::new()));
             }
+            hdus.push(Hdu {
+                header,
+                data_raw,
+                ..Default::default()
+            });
         }
         Ok(HduList { hdus })
     }
@@ -140,7 +115,7 @@ impl HduList {
     /// // empty header
     /// assert!(!hdu_list.is_header_valid()?);
     ///
-    /// let mut hdu = Hdu::new(FitsHeader::default(), Vec::<u8>::new());
+    /// let mut hdu = Hdu::new();
     ///
     /// // non-empty header missing simple card
     /// let bitpix_card = FitsHeaderCard::from(*b"BITPIX  =                  -32 / FITS BITS/PIXEL                                ");
@@ -174,59 +149,64 @@ impl HduList {
 
     fn drain_header_bytes(raw: &mut Vec<u8>, hdu_num: usize) -> Result<Vec<u8>, FitsHeaderError> {
         let raw_len = raw.len();
-        let block_len = if hdu_num == 0 {
-            if raw_len < HEADER_BLOCK_LEN {
-                return Err(FitsHeaderError::InvalidLength {
-                    expected: HEADER_BLOCK_LEN,
-                    found: raw_len,
-                    intent: ["HDU 0 header"].concat(),
-                });
-            } else {
-                HEADER_BLOCK_LEN
-            }
-        } else if raw_len < HEADER_CARD_LEN {
+        if raw_len < FITS_RECORD_LEN {
             return Err(FitsHeaderError::InvalidLength {
-                expected: HEADER_CARD_LEN,
+                expected: FITS_RECORD_LEN,
                 found: raw_len,
                 intent: ["HDU ", &hdu_num.to_string(), " header"].concat(),
             });
-        } else {
-            HEADER_CARD_LEN
-        };
-        Ok(raw.drain(0..block_len).collect())
+        }
+        Ok(raw.drain(0..FITS_RECORD_LEN).collect())
     }
 }
 
 /// A representation of a Header Data Unit within a FITS file.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Hdu {
     /// The header section of the HDU.
     pub header: FitsHeader,
-    data: Rc<dyn FitsDataCollection>,
+    data_raw: Vec<u8>,
+    data: Option<Rc<dyn FitsDataCollection>>,
 }
 
 impl Hdu {
     /// Constructs an HDU with the given header and data.
-    pub fn new(header: FitsHeader, data: impl FitsDataCollection + 'static) -> Self {
-        Hdu {
-            header,
-            data: Rc::new(data),
-        }
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// Serializes the contents of the HDU to bytes.
     pub fn to_bytes(self) -> Vec<u8> {
         let mut result = self.header.to_bytes();
-        result.append(&mut self.data.to_bytes());
+        let mut data_raw = if let Some(data) = self.data {
+            let mut data_raw = data.to_bytes();
+            if data_raw.len() % FITS_RECORD_LEN != 0 {
+                let num_records = (data_raw.len() / FITS_RECORD_LEN) + 1;
+                let final_len = num_records * FITS_RECORD_LEN;
+                // need to determine which padding value to use
+                data_raw.resize(final_len, b' ');
+            }
+            data_raw
+        } else {
+            self.data_raw
+        };
+        result.append(&mut data_raw);
         result
     }
 
     /// Gets the data section of the HDU.
-    pub fn get_data<T: FitsDataCollection>(&self) -> Rc<T> {
-        unsafe {
-            let ptr = Rc::into_raw(Rc::clone(&self.data));
-            let new_ptr: *const T = ptr.cast();
-            Rc::from_raw(new_ptr)
+    pub fn get_data<T: FitsDataCollection + 'static>(&mut self) -> Result<Rc<T>, FitsHeaderError> {
+        if let Some(data) = &self.data {
+            unsafe {
+                let ptr = Rc::into_raw(Rc::clone(data));
+                let new_ptr: *const T = ptr.cast();
+                Ok(Rc::from_raw(new_ptr))
+            }
+        } else {
+            let data = Rc::new(T::from_bytes(self.data_raw.drain(..).collect())?);
+            let ret = Rc::clone(&data);
+            self.data = Some(data);
+            Ok(ret)
         }
     }
 }
@@ -239,7 +219,7 @@ pub trait FitsDataCollection: Debug {
         Self: Sized;
 
     /// Serializes the data collection to bytes.
-    fn to_bytes(self: Rc<Self>) -> Vec<u8>;
+    fn to_bytes(&self) -> Vec<u8>;
 }
 
 impl FitsDataCollection for Vec<u8> {
@@ -247,8 +227,8 @@ impl FitsDataCollection for Vec<u8> {
         Ok(raw)
     }
 
-    fn to_bytes(self: Rc<Self>) -> Vec<u8> {
-        (&*self).to_owned()
+    fn to_bytes(&self) -> Vec<u8> {
+        self.to_owned()
     }
 }
 
@@ -261,9 +241,9 @@ impl FitsDataCollection for Vec<i16> {
         Ok(data)
     }
 
-    fn to_bytes(self: Rc<Self>) -> Vec<u8> {
+    fn to_bytes(&self) -> Vec<u8> {
         let mut data = Vec::with_capacity(self.len() * 2);
-        for chunk in &*self {
+        for chunk in self {
             data.extend_from_slice(&chunk.to_be_bytes());
         }
         data
@@ -279,7 +259,7 @@ impl FitsDataCollection for Vec<i32> {
         Ok(data)
     }
 
-    fn to_bytes(self: Rc<Self>) -> Vec<u8> {
+    fn to_bytes(&self) -> Vec<u8> {
         let mut data = Vec::with_capacity(self.len() * 4);
         for chunk in &*self {
             data.extend_from_slice(&chunk.to_be_bytes());
@@ -297,7 +277,7 @@ impl FitsDataCollection for Vec<f32> {
         Ok(data)
     }
 
-    fn to_bytes(self: Rc<Self>) -> Vec<u8> {
+    fn to_bytes(&self) -> Vec<u8> {
         let mut data = Vec::with_capacity(self.len() * 4);
         for chunk in &*self {
             data.extend_from_slice(&chunk.to_be_bytes());
@@ -315,7 +295,7 @@ impl FitsDataCollection for Vec<f64> {
         Ok(data)
     }
 
-    fn to_bytes(self: Rc<Self>) -> Vec<u8> {
+    fn to_bytes(&self) -> Vec<u8> {
         let mut data = Vec::with_capacity(self.len() * 8);
         for chunk in &*self {
             data.extend_from_slice(&chunk.to_be_bytes());
