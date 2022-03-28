@@ -12,8 +12,8 @@ fn test_hdu_list_from_bytes() -> Result<(), Box<dyn Error>> {
         let mut fits_bytes = Vec::new();
         fits_file_reader.read_to_end(&mut fits_bytes)?;
 
-        let hdu_list = HduList::from_bytes(fits_bytes)?;
-        assert!(hdu_list.hdus.len() == 2);
+        let hdu_list = HduList::from_bytes(fits_bytes.clone())?;
+        assert!(hdu_list.to_bytes() == fits_bytes);
     }
 
     {
@@ -22,8 +22,8 @@ fn test_hdu_list_from_bytes() -> Result<(), Box<dyn Error>> {
         let mut fits_bytes = Vec::new();
         fits_file_reader.read_to_end(&mut fits_bytes)?;
 
-        let hdu_list = HduList::from_bytes(fits_bytes)?;
-        assert!(hdu_list.hdus.len() == 2);
+        let hdu_list = HduList::from_bytes(fits_bytes.clone())?;
+        assert!(hdu_list.to_bytes() == fits_bytes);
     }
 
     Ok(())
