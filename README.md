@@ -1,4 +1,4 @@
-![workflow](https://github.com/eta077/astro-rs/actions/workflows/build-release.yml/badge.svg) ![workflow](https://github.com/eta077/astro-rs/actions/workflows/test-release.yml/badge.svg) [![codecov](https://codecov.io/gh/eta077/astro-rs/branch/release/graph/badge.svg)](https://codecov.io/gh/eta077/astro-rs)
+![workflow](https://github.com/eta077/astro-rs/actions/workflows/build-release.yml/badge.svg) ![workflow](https://github.com/eta077/astro-rs/actions/workflows/test-release.yml/badge.svg) [![codecov](https://codecov.io/gh/eta077/astro-rs/branch/release/graph/badge.svg)](https://codecov.io/gh/eta077/astro-rs) ![docs.rs](https://img.shields.io/docsrs/astro-rs)
 
 # astro-rs
 Inspired by Astropy (http://astropy.org / https://github.com/astropy/astropy)
