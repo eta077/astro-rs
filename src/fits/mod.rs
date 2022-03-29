@@ -1,4 +1,4 @@
-//! This module provides utilities to interact with FITS data.
+//! Serialize and deserialize FITS data.
 
 mod header;
 mod header_value;
@@ -160,7 +160,7 @@ impl HduList {
     }
 }
 
-/// A representation of a Header Data Unit within a FITS file.
+/// A Header Data Unit within a FITS file.
 #[derive(Debug, Default)]
 pub struct Hdu {
     /// The header section of the HDU.
@@ -183,7 +183,7 @@ impl Hdu {
             if data_raw.len() % FITS_RECORD_LEN != 0 {
                 let num_records = (data_raw.len() / FITS_RECORD_LEN) + 1;
                 let final_len = num_records * FITS_RECORD_LEN;
-                // need to determine which padding value to use
+                // TODO: need to determine which padding value to use
                 data_raw.resize(final_len, b' ');
             }
             data_raw

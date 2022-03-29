@@ -1,5 +1,4 @@
 use std::fmt::Debug;
-use std::rc::Rc;
 
 use super::header::FitsHeaderError;
 
@@ -11,9 +10,30 @@ pub trait FitsHeaderValue: Debug {
         Self: Sized;
 
     /// Serializes the value to bytes. The bytes shall include padding spaces.
-    fn to_bytes(self: Rc<Self>) -> [u8; 70];
+    fn to_bytes(&self) -> [u8; 70];
 }
 
+/// ```
+/// use astro_rs::fits::FitsHeaderError;
+/// use astro_rs::fits::FitsHeaderValue;
+///
+/// // successful deserialization
+/// let true_value: bool = FitsHeaderValue::from_bytes(b"T".to_vec())?;
+/// assert!(true_value);
+/// let false_value: bool = FitsHeaderValue::from_bytes(b"F".to_vec())?;
+/// assert!(!false_value);
+///
+/// // failed deserialization
+/// let result: Result<bool, FitsHeaderError> = FitsHeaderValue::from_bytes(b"A".to_vec());
+/// assert!(result.is_err());
+/// let result: Result<bool, FitsHeaderError> = FitsHeaderValue::from_bytes(b"true".to_vec());
+/// assert!(result.is_err());
+///
+/// // serialization
+/// assert_eq!(true_value.to_bytes(), *b"                   T                                                  ");
+/// assert_eq!(false_value.to_bytes(), *b"                   F                                                  ");
+/// # Ok::<(), astro_rs::fits::FitsHeaderError>(())
+/// ```
 impl FitsHeaderValue for bool {
     fn from_bytes(raw: Vec<u8>) -> Result<Self, FitsHeaderError> {
         if raw.len() == 1 {
@@ -34,7 +54,7 @@ impl FitsHeaderValue for bool {
         }
     }
 
-    fn to_bytes(self: Rc<Self>) -> [u8; 70] {
+    fn to_bytes(&self) -> [u8; 70] {
         let mut result = [b' '; 70];
         if *self {
             result[19] = b'T';
@@ -45,26 +65,74 @@ impl FitsHeaderValue for bool {
     }
 }
 
+/// ```
+/// use astro_rs::fits::FitsHeaderError;
+/// use astro_rs::fits::FitsHeaderValue;
+///
+/// // successful deserialization
+/// let max_value: u8 = FitsHeaderValue::from_bytes(b"255".to_vec())?;
+/// assert_eq!(max_value, 255);
+/// let min_value: u8 = FitsHeaderValue::from_bytes(b"0".to_vec())?;
+/// assert_eq!(min_value, 0);
+///
+/// // failed deserialization
+/// let result: Result<u8, FitsHeaderError> = FitsHeaderValue::from_bytes(b"300".to_vec());
+/// assert!(result.is_err());
+/// let result: Result<u8, FitsHeaderError> = FitsHeaderValue::from_bytes(b"Not a number".to_vec());
+/// assert!(result.is_err());
+///
+/// // serialization
+/// assert_eq!(max_value.to_bytes(), *b"                 255                                                  ");
+/// assert_eq!(min_value.to_bytes(), *b"                   0                                                  ");
+/// # Ok::<(), astro_rs::fits::FitsHeaderError>(())
+/// ```
 impl FitsHeaderValue for u8 {
     fn from_bytes(raw: Vec<u8>) -> Result<Self, FitsHeaderError> {
-        if raw.len() == 1 {
-            Ok(*raw.first().unwrap() - 48)
-        } else {
-            Err(FitsHeaderError::InvalidLength {
-                expected: 1,
-                found: raw.len(),
+        let value_string =
+            String::from_utf8(raw).map_err(|er| FitsHeaderError::DeserializationError {
+                found: er.into_bytes(),
+                intent: String::from("header card u8 value"),
+            })?;
+        value_string
+            .parse()
+            .map_err(|_| FitsHeaderError::DeserializationError {
+                found: value_string.into_bytes(),
                 intent: String::from("header card u8 value"),
             })
-        }
     }
 
-    fn to_bytes(self: Rc<Self>) -> [u8; 70] {
+    fn to_bytes(&self) -> [u8; 70] {
         let mut result = [b' '; 70];
-        result[19] = *self + 48;
+        let value_raw = self.to_string().into_bytes();
+        let start = 20 - value_raw.len();
+        for (i, b) in value_raw.iter().enumerate() {
+            result[start + i] = *b;
+        }
         result
     }
 }
 
+/// ```
+/// use astro_rs::fits::FitsHeaderError;
+/// use astro_rs::fits::FitsHeaderValue;
+///
+/// // successful deserialization
+/// let max_value: u16 = FitsHeaderValue::from_bytes(b"65535".to_vec())?;
+/// assert_eq!(max_value, 65535);
+/// let min_value: u16 = FitsHeaderValue::from_bytes(b"0".to_vec())?;
+/// assert_eq!(min_value, 0);
+///
+/// // failed deserialization
+/// let result: Result<u16, FitsHeaderError> = FitsHeaderValue::from_bytes(b"66000".to_vec());
+/// assert!(result.is_err());
+/// let result: Result<u16, FitsHeaderError> = FitsHeaderValue::from_bytes(b"Not a number".to_vec());
+/// assert!(result.is_err());
+///
+/// // serialization
+/// assert_eq!(max_value.to_bytes(), *b"               65535                                                  ");
+/// assert_eq!(min_value.to_bytes(), *b"                   0                                                  ");
+/// # Ok::<(), astro_rs::fits::FitsHeaderError>(())
+/// ```
 impl FitsHeaderValue for u16 {
     fn from_bytes(raw: Vec<u8>) -> Result<Self, FitsHeaderError> {
         let value_string =
@@ -80,7 +148,7 @@ impl FitsHeaderValue for u16 {
             })
     }
 
-    fn to_bytes(self: Rc<Self>) -> [u8; 70] {
+    fn to_bytes(&self) -> [u8; 70] {
         let mut result = [b' '; 70];
         let value_raw = self.to_string().into_bytes();
         let start = 20 - value_raw.len();
@@ -91,6 +159,27 @@ impl FitsHeaderValue for u16 {
     }
 }
 
+/// ```
+/// use astro_rs::fits::FitsHeaderError;
+/// use astro_rs::fits::FitsHeaderValue;
+///
+/// // successful deserialization
+/// let max_value: u32 = FitsHeaderValue::from_bytes(b"4294967295".to_vec())?;
+/// assert_eq!(max_value, 4294967295);
+/// let min_value: u32 = FitsHeaderValue::from_bytes(b"0".to_vec())?;
+/// assert_eq!(min_value, 0);
+///
+/// // failed deserialization
+/// let result: Result<u32, FitsHeaderError> = FitsHeaderValue::from_bytes(b"4300000000".to_vec());
+/// assert!(result.is_err());
+/// let result: Result<u32, FitsHeaderError> = FitsHeaderValue::from_bytes(b"Not a number".to_vec());
+/// assert!(result.is_err());
+///
+/// // serialization
+/// assert_eq!(max_value.to_bytes(), *b"          4294967295                                                  ");
+/// assert_eq!(min_value.to_bytes(), *b"                   0                                                  ");
+/// # Ok::<(), astro_rs::fits::FitsHeaderError>(())
+/// ```
 impl FitsHeaderValue for u32 {
     fn from_bytes(raw: Vec<u8>) -> Result<Self, FitsHeaderError> {
         let value_string =
@@ -106,7 +195,7 @@ impl FitsHeaderValue for u32 {
             })
     }
 
-    fn to_bytes(self: Rc<Self>) -> [u8; 70] {
+    fn to_bytes(&self) -> [u8; 70] {
         let mut result = [b' '; 70];
         let value_raw = self.to_string().into_bytes();
         let start = 20 - value_raw.len();
@@ -117,22 +206,42 @@ impl FitsHeaderValue for u32 {
     }
 }
 
+/// ```
+/// use astro_rs::fits::FitsHeaderError;
+/// use astro_rs::fits::FitsHeaderValue;
+///
+/// // successful deserialization
+/// let value: String = FitsHeaderValue::from_bytes(String::from("hello world").into_bytes())?;
+/// assert_eq!(value, String::from("hello world"));
+/// let quote_value: String = FitsHeaderValue::from_bytes(String::from("this 'includes' '' quotes").into_bytes())?;
+/// assert_eq!(quote_value, String::from("this 'includes' '' quotes"));
+///
+/// // failed deserialization
+/// let result: Result<String, FitsHeaderError> = FitsHeaderValue::from_bytes(vec![0, 159, 146, 150]);
+/// assert!(result.is_err());
+///
+/// // serialization
+/// assert_eq!(value.to_bytes(), *b"'hello world'                                                         ");
+/// assert_eq!(quote_value.to_bytes(), *b"'this 'includes' '' quotes'                                           ");
+/// # Ok::<(), astro_rs::fits::FitsHeaderError>(())
+/// ```
 impl FitsHeaderValue for String {
     fn from_bytes(raw: Vec<u8>) -> Result<Self, FitsHeaderError> {
+        // TODO: account for escaping ' character
         String::from_utf8(raw).map_err(|er| FitsHeaderError::DeserializationError {
             found: er.into_bytes(),
-            intent: String::from("header card u16 value"),
+            intent: String::from("header card String value"),
         })
     }
 
-    fn to_bytes(self: Rc<Self>) -> [u8; 70] {
+    fn to_bytes(&self) -> [u8; 70] {
         let mut result = [b' '; 70];
         result[0] = b'\'';
         let value_raw = self.as_bytes();
         for (i, b) in value_raw.iter().enumerate() {
             result[i + 1] = *b;
         }
-        result[value_raw.len()] = b'\'';
+        result[value_raw.len() + 1] = b'\'';
         result
     }
 }
@@ -180,7 +289,7 @@ impl FitsHeaderValue for Bitpix {
         }
     }
 
-    fn to_bytes(self: Rc<Self>) -> [u8; 70] {
+    fn to_bytes(&self) -> [u8; 70] {
         let mut result = [b' '; 70];
         match *self {
             Bitpix::U8 => result[19] = b'8',

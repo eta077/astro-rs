@@ -9,9 +9,9 @@ use thiserror::Error;
 
 /// The expected keyword for the first header card of the primary HDU.
 pub const SIMPLE_KEYWORD: [u8; 8] = *b"SIMPLE  ";
-/// The header keyword indicating the size of each value in the HDU data.
+/// The header keyword indicating the size of each value in the HDU data section.
 pub const BITPIX_KEYWORD: [u8; 8] = *b"BITPIX  ";
-/// The header keyword indicating how many axes are present in the HDU data.
+/// The header keyword indicating how many axes are present in the HDU data section.
 pub const NAXIS_KEYWORD: [u8; 8] = *b"NAXIS   ";
 /// The header keyword indicating the end of the header section.
 pub const END_KEYWORD: [u8; 8] = *b"END     ";
@@ -45,7 +45,7 @@ pub enum FitsHeaderError {
     },
 }
 
-/// A representation of the header portion of an HDU.
+/// The header portion of an HDU.
 #[derive(Debug, Default)]
 pub struct FitsHeader {
     cards: Vec<FitsHeaderCard>,
@@ -108,7 +108,7 @@ impl FitsHeader {
     }
 }
 
-/// A representation of a card within an HDU header section.
+/// A card within an HDU header section.
 ///
 /// ```
 /// use astro_rs::fits::FitsHeaderCard;
@@ -181,7 +181,8 @@ impl From<FitsHeaderCard> for [u8; 80] {
     }
 }
 
-/// A representation of a FITS header keyword.
+/// A FITS header keyword.
+/// This wrapper provides functions to interact with both raw arrays and strings.
 ///
 /// ```
 /// use astro_rs::fits::FitsHeaderKeyword;
@@ -233,7 +234,7 @@ impl PartialEq<[u8; 8]> for FitsHeaderKeyword {
 }
 
 /// A representation of the combined header card value and comment.
-/// The total number of bytes between the value and comment must not exceed 72.
+/// This wrapper ensures that the total number of bytes between the value and comment will not exceed 72.
 #[derive(Debug)]
 pub struct FitsHeaderValueContainer {
     raw: Vec<u8>,
@@ -276,10 +277,10 @@ impl FitsHeaderValueContainer {
     /// Gets the comment section of the header card.
     ///
     /// ```
-    /// use astro_rs::fits::FitsHeaderCard;
+    /// use astro_rs::fits::FitsHeaderValueContainer;
     ///
-    /// let mut card = FitsHeaderCard::from(*b"SIMPLE  =                    T / FITS STANDARD                                  ");
-    /// assert_eq!(*card.get_comment()?, String::from("FITS STANDARD"));
+    /// let mut card_value = FitsHeaderValueContainer::from(*b"=                    T / FITS STANDARD                                  ");
+    /// assert_eq!(*card_value.get_comment()?, String::from("FITS STANDARD"));
     /// # Ok::<(), astro_rs::fits::FitsHeaderError>(())
     /// ```
     pub fn get_comment(&mut self) -> Result<Rc<String>, FitsHeaderError> {
