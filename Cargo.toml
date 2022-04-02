@@ -1,6 +1,6 @@
 [package]
 name = "astro-rs"
-version = "0.0.1"
+version = "0.0.2"
 edition = "2021"
 license = "MIT"
 description = "Astronomy utils"
@@ -15,4 +15,5 @@ exclude = [
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+measurements = { version = "0.11" }
 thiserror = { version = "1.0" }
