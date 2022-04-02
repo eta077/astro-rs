@@ -1,5 +1,7 @@
 //! Serialize and deserialize FITS data.
+//! See https://archive.stsci.edu/fits/fits_standard/fits_standard.html for the FITS API.
 
+pub mod hdu_types;
 mod header;
 mod header_value;
 

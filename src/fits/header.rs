@@ -48,7 +48,8 @@ pub enum FitsHeaderError {
 /// The header portion of an HDU.
 #[derive(Debug, Default)]
 pub struct FitsHeader {
-    cards: Vec<FitsHeaderCard>,
+    /// The card images contained in the header.
+    pub cards: Vec<FitsHeaderCard>,
 }
 
 impl FitsHeader {
@@ -100,11 +101,6 @@ impl FitsHeader {
             }
         }
         None
-    }
-
-    /// Inserts the given card at the given index, shifting all subsequent elements right.
-    pub fn insert_card(&mut self, index: usize, card: FitsHeaderCard) {
-        self.cards.insert(index, card);
     }
 }
 
