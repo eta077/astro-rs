@@ -1,14 +1,48 @@
 //! Compare, calculate, and transform spacial coordinates
 
+mod lookup;
+
+use chrono::{DateTime, Utc};
 use measurements::{Angle, Distance};
 
-/// Spherical coordinates expressed as (right ascension, declination)
-#[derive(Debug)]
+pub use lookup::*;
+
+/// Horizontal coordinates expressed as (altitude, azimuth)
+#[derive(Debug, PartialEq, Eq)]
+pub struct HorizontalCoord {
+    /// The altitude angle
+    pub alt: Angle,
+    /// The azimuth angle
+    pub az: Angle,
+}
+
+impl Default for HorizontalCoord {
+    fn default() -> Self {
+        HorizontalCoord {
+            alt: Angle::from_radians(0.0),
+            az: Angle::from_radians(0.0),
+        }
+    }
+}
+
+/// Equitorial coordinates expressed as (right ascension, declination)
+#[derive(Debug, PartialEq, Eq)]
 pub struct EquatorialCoord {
     /// The right ascension angle
     pub ra: Angle,
     /// The declination angle
     pub dec: Angle,
+}
+
+impl EquatorialCoord {
+    /// Calculates the altitude/azimuth for the equatorial coordinates based on the given location.
+    pub fn calculate_horizontal_coords(
+        &self,
+        _date_time: &DateTime<Utc>,
+        _location: &EarthLocation,
+    ) -> HorizontalCoord {
+        HorizontalCoord::default()
+    }
 }
 
 impl Default for EquatorialCoord {
