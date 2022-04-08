@@ -19,7 +19,11 @@ fn test_lookup_by_name() -> Result<(), Box<dyn Error>> {
     let m33_horiz_coords =
         m33_eq_coords.calculate_horizontal_coords(&date_time.with_timezone(&Utc), &bear_mountain);
 
-    println!("{}, {}", m33_horiz_coords.alt.as_degrees(), m33_horiz_coords.az.as_degrees());
+    println!(
+        "{}, {}",
+        m33_horiz_coords.alt.as_degrees(),
+        m33_horiz_coords.az.as_degrees()
+    );
 
     Ok(())
 }
