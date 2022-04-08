@@ -11,7 +11,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: eta077/criterion-compare-action@main
+      - run: rustup toolchain update nightly && rustup default nightly
+      - name: Run benchmark
+        run: cargo +nightly bench | tee bench_output.txt
+      - name: Store benchmark result
+        uses: benchmark-action/github-action-benchmark@v1
         with:
-          branchName: ${{ github.base_ref }}
-          token: ${{ secrets.GITHUB_TOKEN }}
+          name: Rust Benchmark
+          tool: 'cargo'
+          output-file-path: bench_output.txt
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
