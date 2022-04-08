@@ -14,7 +14,7 @@ pub use header_value::*;
 const BLANK_KEYWORD: [u8; 8] = *b"        ";
 
 /// A representation of the entirety of a FITS file.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct HduList {
     /// The HDUs that compose the HduList.
     pub hdus: Vec<Hdu>,
@@ -163,7 +163,7 @@ impl HduList {
 }
 
 /// A Header Data Unit within a FITS file.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Hdu {
     /// The header section of the HDU.
     pub header: FitsHeader,

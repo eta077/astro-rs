@@ -46,7 +46,7 @@ pub enum FitsHeaderError {
 }
 
 /// The header portion of an HDU.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct FitsHeader {
     /// The card images contained in the header.
     pub cards: Vec<FitsHeaderCard>,
@@ -122,7 +122,7 @@ impl FitsHeader {
 /// assert_eq!(comparison, card_raw);
 /// # Ok::<(), astro_rs::fits::FitsHeaderError>(())
 /// ```
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FitsHeaderCard {
     keyword: FitsHeaderKeyword,
     value: FitsHeaderValueContainer,
@@ -231,7 +231,7 @@ impl PartialEq<[u8; 8]> for FitsHeaderKeyword {
 
 /// A representation of the combined header card value and comment.
 /// This wrapper ensures that the total number of bytes between the value and comment will not exceed 72.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FitsHeaderValueContainer {
     raw: Vec<u8>,
     value: Option<Rc<dyn FitsHeaderValue>>,

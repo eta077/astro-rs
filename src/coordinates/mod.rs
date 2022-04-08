@@ -8,7 +8,7 @@ use measurements::{Angle, Distance};
 pub use lookup::*;
 
 /// Horizontal coordinates expressed as (altitude, azimuth)
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct HorizontalCoord {
     /// The altitude angle
     pub alt: Angle,
@@ -26,7 +26,7 @@ impl Default for HorizontalCoord {
 }
 
 /// Equitorial coordinates expressed as (right ascension, declination)
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct EquatorialCoord {
     /// The right ascension angle
     pub ra: Angle,
@@ -55,7 +55,7 @@ impl Default for EquatorialCoord {
 }
 
 /// Coordinates that represent a location on Earth.
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct EarthLocation {
     /// The latitude coordinate
     pub lat: Angle,
