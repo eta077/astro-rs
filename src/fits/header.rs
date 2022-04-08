@@ -71,7 +71,7 @@ impl FitsHeader {
         }
 
         let mut cards = Vec::with_capacity(num_cards);
-        while !raw.is_empty() {
+        while raw.len() == 0 {
             let card_vec = raw.drain(0..HEADER_CARD_LEN).collect::<Vec<u8>>();
             let card_slice: [u8; 80] = card_vec[0..80].try_into().unwrap();
             cards.push(FitsHeaderCard::from(card_slice));
