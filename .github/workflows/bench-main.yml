@@ -11,7 +11,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: boa-dev/criterion-compare-action@v3.2.0
+      - uses: eta077/criterion-compare-action@main
         with:
-          branchName: ${{ github.base_ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
