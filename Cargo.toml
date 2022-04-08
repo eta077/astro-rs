@@ -9,6 +9,8 @@ readme = "README.md"
 
 exclude = [
     ".github",
+    "assets",
+    "benches",
     "tests" 
 ]
 
@@ -22,4 +24,9 @@ thiserror = { version = "1.0" }
 urlencoding = { version = "2.1" }
 
 [dev-dependencies]
+criterion = "0.3"
 tokio-test = { version = "0.4" }
+
+[[bench]]
+name = "fits_benchmark"
+harness = false
