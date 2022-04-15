@@ -1,10 +1,11 @@
 //! Compare, calculate, and transform spacial coordinates
 
+mod frames;
 mod lookup;
 
-use chrono::{DateTime, Utc};
 use measurements::{Angle, Distance};
 
+pub use frames::*;
 pub use lookup::*;
 
 /// Horizontal coordinates expressed as (altitude, azimuth)
@@ -32,17 +33,6 @@ pub struct EquatorialCoord {
     pub ra: Angle,
     /// The declination angle
     pub dec: Angle,
-}
-
-impl EquatorialCoord {
-    /// Calculates the altitude/azimuth for the equatorial coordinates based on the given location.
-    pub fn calculate_horizontal_coords(
-        &self,
-        _date_time: &DateTime<Utc>,
-        _location: &EarthLocation,
-    ) -> HorizontalCoord {
-        HorizontalCoord::default()
-    }
 }
 
 impl Default for EquatorialCoord {

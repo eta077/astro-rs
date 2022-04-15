@@ -1,3 +1,4 @@
+use super::frames::Icrs;
 use super::EquatorialCoord;
 
 use hyper::Client;
@@ -32,15 +33,15 @@ pub enum AstroLookupError {
 /// Fetches the coordinates of an object with the given identifier.
 ///
 /// ```
-/// use astro_rs::coordinates::{self, AstroLookupError, EquatorialCoord};
+/// use astro_rs::coordinates::{self, *};
 /// use measurements::Angle;
 ///
-/// let m33_coords = tokio_test::block_on(async {
-///     coordinates::lookup_by_name("M33").await
-/// })?;
-/// assert_eq!(m33_coords, EquatorialCoord {
-///     ra: Angle::from_degrees(23.46206906218),
-///     dec: Angle::from_degrees(30.66017511198)
+/// let m33_coords = tokio_test::block_on(async { coordinates::lookup_by_name("M33").await })?;
+/// assert_eq!(m33_coords, Icrs { 
+///     coords: EquatorialCoord {
+///         ra: Angle::from_degrees(23.46206906218),
+///         dec: Angle::from_degrees(30.66017511198)
+///     },
 /// });
 ///
 /// let no_coords = tokio_test::block_on(async {
@@ -49,7 +50,7 @@ pub enum AstroLookupError {
 /// assert!(no_coords.is_err());
 /// # Ok::<(), astro_rs::coordinates::AstroLookupError>(())
 /// ```
-pub async fn lookup_by_name(name: &str) -> Result<EquatorialCoord, AstroLookupError> {
+pub async fn lookup_by_name(name: &str) -> Result<Icrs, AstroLookupError> {
     let client = Client::new();
     let uri_string = [SIMBAD_BASE_URL, &encode(name), SIMBAD_OUTPUT_PARAMS].concat();
     let uri = uri_string
@@ -97,8 +98,10 @@ pub async fn lookup_by_name(name: &str) -> Result<EquatorialCoord, AstroLookupEr
         });
     };
 
-    Ok(EquatorialCoord {
-        ra: Angle::from_degrees(ra),
-        dec: Angle::from_degrees(dec),
+    Ok(Icrs {
+        coords: EquatorialCoord {
+            ra: Angle::from_degrees(ra),
+            dec: Angle::from_degrees(dec),
+        },
     })
 }

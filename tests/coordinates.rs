@@ -16,8 +16,9 @@ fn test_lookup_by_name() -> Result<(), Box<dyn Error>> {
     // 11pm EDT on 2012 July 12
     let date_time = DateTime::parse_from_rfc3339("2012-07-12T23:00:00.00-04:00")?;
 
-    let m33_horiz_coords =
-        m33_eq_coords.calculate_horizontal_coords(&date_time.with_timezone(&Utc), &bear_mountain);
+    let m33_horiz_coords = m33_eq_coords
+        .as_alt_az(&date_time.with_timezone(&Utc), &bear_mountain)
+        .coords;
 
     println!(
         "{}, {}",
