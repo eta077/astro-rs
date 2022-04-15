@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 
-use super::{EquatorialCoord, HorizontalCoord, EarthLocation};
+use super::{EarthLocation, EquatorialCoord, HorizontalCoord};
 
 /// Coordinates in the International Celestial Reference System.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]

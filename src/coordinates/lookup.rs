@@ -37,7 +37,7 @@ pub enum AstroLookupError {
 /// use measurements::Angle;
 ///
 /// let m33_coords = tokio_test::block_on(async { coordinates::lookup_by_name("M33").await })?;
-/// assert_eq!(m33_coords, Icrs { 
+/// assert_eq!(m33_coords, Icrs {
 ///     coords: EquatorialCoord {
 ///         ra: Angle::from_degrees(23.46206906218),
 ///         dec: Angle::from_degrees(30.66017511198)
