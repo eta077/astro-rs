@@ -59,25 +59,18 @@ impl FitsHeader {
     }
 
     /// Constructs a FitsHeader from the given bytes.
-    pub fn from_bytes(mut raw: Vec<u8>) -> Result<FitsHeader, FitsHeaderError> {
+    pub fn from_bytes(mut raw: Vec<u8>) -> FitsHeader {
         let raw_len = raw.len();
         let num_cards = raw_len / HEADER_CARD_LEN;
-        if raw_len % HEADER_CARD_LEN != 0 {
-            return Err(FitsHeaderError::InvalidLength {
-                expected: (num_cards + 1) * HEADER_CARD_LEN,
-                found: raw_len,
-                intent: String::from("FITS header"),
-            });
-        }
 
         let mut cards = Vec::with_capacity(num_cards);
-        while !raw.is_empty() {
+        while raw.len() > HEADER_CARD_LEN {
             let card_vec = raw.drain(0..HEADER_CARD_LEN).collect::<Vec<u8>>();
             let card_slice: [u8; 80] = card_vec[0..80].try_into().unwrap();
             cards.push(FitsHeaderCard::from(card_slice));
         }
 
-        Ok(FitsHeader { cards })
+        FitsHeader { cards }
     }
 
     /// Serializes the header into bytes.
@@ -207,8 +200,8 @@ impl From<FitsHeaderKeyword> for [u8; 8] {
     }
 }
 
-impl PartialEq<&str> for FitsHeaderKeyword {
-    fn eq(&self, other: &&str) -> bool {
+impl PartialEq<str> for FitsHeaderKeyword {
+    fn eq(&self, other: &str) -> bool {
         if other.len() > HEADER_KEYWORD_LEN {
             return false;
         }

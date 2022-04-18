@@ -13,8 +13,8 @@ fn bench_get_header(c: &mut Criterion) {
             let mut fits_bytes = Vec::new();
             fits_file_reader.read_to_end(&mut fits_bytes).unwrap();
 
-            let hdu_list = HduList::from_bytes(fits_bytes.clone()).unwrap();
-            hdu_list.hdus.first().unwrap().header.clone()
+            let mut hdu_list = HduList::from_bytes(fits_bytes.clone());
+            hdu_list.first_mut().unwrap().header.clone()
         })
     });
 }

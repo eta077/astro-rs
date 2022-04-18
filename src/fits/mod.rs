@@ -7,17 +7,20 @@ mod header_value;
 
 use std::fmt::Debug;
 use std::rc::Rc;
+use std::slice::IterMut;
 
 pub use header::*;
 pub use header_value::*;
 
+/// The expected keyword for the name of an extension.
+pub const EXTNAME_KEYWORD: [u8; 8] = *b"EXTNAME ";
 const BLANK_KEYWORD: [u8; 8] = *b"        ";
 
 /// A representation of the entirety of a FITS file.
 #[derive(Debug, Default, Clone)]
 pub struct HduList {
-    /// The HDUs that compose the HduList.
-    pub hdus: Vec<Hdu>,
+    raw: Vec<u8>,
+    hdus: Vec<Hdu>,
 }
 
 impl HduList {
@@ -27,85 +30,101 @@ impl HduList {
     }
 
     /// Constructs an HduList from the given bytes.
-    pub fn from_bytes(mut raw: Vec<u8>) -> Result<HduList, FitsHeaderError> {
-        let mut hdus = Vec::new();
-
-        while !raw.is_empty() {
-            let mut header_raw = Vec::new();
-            let mut new_header_bytes = HduList::drain_header_bytes(&mut raw, hdus.len())?;
-            let mut cards_read = new_header_bytes.len() / HEADER_CARD_LEN;
-            header_raw.append(&mut new_header_bytes);
-
-            // search for the END keyword.
-            // this should be the last keyword in the header, so if something other than ' ' is found, stop searching
-            loop {
-                let mut end_found = false;
-                for card in 1..=cards_read {
-                    let card_index = header_raw.len() - card * HEADER_CARD_LEN;
-                    match header_raw[card_index..card_index + HEADER_KEYWORD_LEN]
-                        .try_into()
-                        .unwrap()
-                    {
-                        END_KEYWORD => {
-                            end_found = true;
-                            break;
-                        }
-                        BLANK_KEYWORD => continue,
-                        _ => {
-                            end_found = false;
-                            break;
-                        }
-                    }
-                }
-                if end_found {
-                    break;
-                }
-                new_header_bytes = HduList::drain_header_bytes(&mut raw, hdus.len())?;
-                cards_read = new_header_bytes.len() / HEADER_CARD_LEN;
-                header_raw.append(&mut new_header_bytes);
-            }
-
-            let mut header = FitsHeader::from_bytes(header_raw)?;
-            let mut data_raw = Vec::new();
-
-            let naxis = *header
-                .get_card(NAXIS_KEYWORD)
-                .and_then(|card| card.get_value::<u16>().ok())
-                .unwrap_or_default();
-            if naxis != 0 {
-                if let Some(bitpix) = header
-                    .get_card(BITPIX_KEYWORD)
-                    .and_then(|card| card.get_value::<Bitpix>().ok())
-                {
-                    let mut data_len = 1;
-                    for x in 1..=naxis {
-                        let mut naxisx_keyword = NAXIS_KEYWORD;
-                        let x_bytes = x.to_string().into_bytes();
-                        for (index, i) in x_bytes.iter().enumerate() {
-                            naxisx_keyword[index + 5] = *i;
-                        }
-
-                        let naxisx = *header
-                            .get_card(naxisx_keyword)
-                            .and_then(|card| card.get_value::<u32>().ok())
-                            .unwrap_or_default() as usize;
-                        data_len *= naxisx;
-                    }
-                    data_len *= bitpix.value() / 8;
-                    if data_len % FITS_RECORD_LEN != 0 {
-                        let num_records = (data_len / FITS_RECORD_LEN) + 1;
-                        data_len = num_records * FITS_RECORD_LEN;
-                    }
-                    data_raw = raw.drain(0..data_len.clamp(0, raw.len())).collect();
-                }
-            }
-            hdus.push(Hdu {
-                header,
-                data_raw,
-                ..Default::default()
-            });
+    pub fn from_bytes(raw: Vec<u8>) -> HduList {
+        HduList {
+            raw,
+            ..Default::default()
         }
-        Ok(HduList { hdus })
+    }
+
+    /// Retrieves the HDU at the given index.
+    pub fn get_by_index(&mut self, index: usize) -> Option<&mut Hdu> {
+        let mut cur_hdus = self.hdus.len();
+        while cur_hdus < index + 1 {
+            if self.raw.is_empty() {
+                return None;
+            }
+
+            let new_hdu = self.read_hdu()?;
+            self.hdus.push(new_hdu);
+            cur_hdus += 1;
+        }
+        Some(&mut self.hdus[index])
+    }
+
+    /// Retrieves the HDU with the given value for the `EXTNAME` keyword.
+    pub fn get_by_name(&mut self, name: &str) -> Option<&mut Hdu> {
+        let mut index = self
+            .hdus
+            .iter_mut()
+            .position(|hdu| HduList::is_hdu_named(hdu, name))
+            .unwrap_or(self.hdus.len() - 1);
+        loop {
+            let mut new_hdu = self.read_hdu()?;
+            if HduList::is_hdu_named(&mut new_hdu, name) {
+                break;
+            }
+
+            self.hdus.push(new_hdu);
+            index += 1;
+            if self.raw.is_empty() {
+                return None;
+            }
+        }
+        Some(&mut self.hdus[index])
+    }
+
+    /// Returns a mutable pointer to the first HDU, or `None` if the list is empty.
+    pub fn first_mut(&mut self) -> Option<&mut Hdu> {
+        if self.hdus.is_empty() {
+            if self.raw.is_empty() {
+                return None;
+            }
+
+            let new_hdu = self.read_hdu()?;
+            self.hdus.push(new_hdu);
+        }
+        Some(&mut self.hdus[0])
+    }
+
+    /// Deserializes all HDUs if necessary, then returns a mutable iterator over the HDUs.
+    pub fn iter_mut(&mut self) -> IterMut<Hdu> {
+        while !self.raw.is_empty() {
+            if let Some(new_hdu) = self.read_hdu() {
+                self.hdus.push(new_hdu);
+            }
+        }
+        self.hdus.iter_mut()
+    }
+
+    /// Deserializes all HDUs up to `index` if necessary, then inserts the given `hdu`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `index` is out of bounds.
+    pub fn insert(&mut self, index: usize, hdu: Hdu) {
+        let mut cur_hdus = self.hdus.len();
+        while cur_hdus < index {
+            if self.raw.is_empty() {
+                panic!("{} is out of bounds (max {})", index, cur_hdus);
+            }
+
+            if let Some(new_hdu) = self.read_hdu() {
+                self.hdus.push(new_hdu);
+                cur_hdus += 1;
+            }
+        }
+        self.hdus.insert(index, hdu);
+    }
+
+    /// Appends `hdu` to the end of the HDU list.
+    pub fn push(&mut self, hdu: Hdu) {
+        while !self.raw.is_empty() {
+            if let Some(new_hdu) = self.read_hdu() {
+                self.hdus.push(new_hdu);
+            }
+        }
+        self.hdus.push(hdu);
     }
 
     /// Validates the existence and format of the SIMPLE header card.
@@ -133,8 +152,7 @@ impl HduList {
     /// ```
     pub fn is_header_valid(&mut self) -> Result<bool, FitsHeaderError> {
         Ok(*self
-            .hdus
-            .first_mut()
+            .get_by_index(0)
             .and_then(|hdu| hdu.header.get_card(SIMPLE_KEYWORD))
             .and_then(|card| card.get_value::<bool>().ok())
             .unwrap_or_default())
@@ -149,16 +167,101 @@ impl HduList {
         result
     }
 
-    fn drain_header_bytes(raw: &mut Vec<u8>, hdu_num: usize) -> Result<Vec<u8>, FitsHeaderError> {
+    fn is_hdu_named(hdu: &mut Hdu, name: &str) -> bool {
+        hdu.header
+            .cards
+            .iter_mut()
+            .find(|card| *card.get_keyword() == EXTNAME_KEYWORD)
+            .and_then(|card| card.get_value::<String>().ok())
+            .map(|value| value.as_str() == name)
+            .unwrap_or_default()
+    }
+
+    fn read_hdu(&mut self) -> Option<Hdu> {
+        let mut header_raw = Vec::new();
+        let mut new_header_bytes = HduList::drain_header_bytes(&mut self.raw)?;
+        let mut cards_read = new_header_bytes.len() / HEADER_CARD_LEN;
+        header_raw.append(&mut new_header_bytes);
+
+        // search for the END keyword.
+        // this should be the last keyword in the header, so if something other than ' ' is found, stop searching
+        loop {
+            let mut end_found = false;
+            for card in 1..=cards_read {
+                let card_index = header_raw.len() - card * HEADER_CARD_LEN;
+                match header_raw[card_index..card_index + HEADER_KEYWORD_LEN]
+                    .try_into()
+                    .unwrap()
+                {
+                    END_KEYWORD => {
+                        end_found = true;
+                        break;
+                    }
+                    BLANK_KEYWORD => continue,
+                    _ => {
+                        end_found = false;
+                        break;
+                    }
+                }
+            }
+            if end_found {
+                break;
+            }
+            new_header_bytes = HduList::drain_header_bytes(&mut self.raw)?;
+            cards_read = new_header_bytes.len() / HEADER_CARD_LEN;
+            header_raw.append(&mut new_header_bytes);
+        }
+
+        let mut header = FitsHeader::from_bytes(header_raw);
+        let mut data_raw = Vec::new();
+
+        let naxis = *header
+            .get_card(NAXIS_KEYWORD)
+            .and_then(|card| card.get_value::<u16>().ok())
+            .unwrap_or_default();
+        if naxis != 0 {
+            if let Some(bitpix) = header
+                .get_card(BITPIX_KEYWORD)
+                .and_then(|card| card.get_value::<Bitpix>().ok())
+            {
+                let mut data_len = 1;
+                for x in 1..=naxis {
+                    let mut naxisx_keyword = NAXIS_KEYWORD;
+                    let x_bytes = x.to_string().into_bytes();
+                    for (index, i) in x_bytes.iter().enumerate() {
+                        naxisx_keyword[index + 5] = *i;
+                    }
+
+                    let naxisx = *header
+                        .get_card(naxisx_keyword)
+                        .and_then(|card| card.get_value::<u32>().ok())
+                        .unwrap_or_default() as usize;
+                    data_len *= naxisx;
+                }
+                data_len *= bitpix.value() / 8;
+                if data_len % FITS_RECORD_LEN != 0 {
+                    let num_records = (data_len / FITS_RECORD_LEN) + 1;
+                    data_len = num_records * FITS_RECORD_LEN;
+                }
+                data_raw = self
+                    .raw
+                    .drain(0..data_len.clamp(0, self.raw.len()))
+                    .collect();
+            }
+        }
+        Some(Hdu {
+            header,
+            data_raw,
+            ..Default::default()
+        })
+    }
+
+    fn drain_header_bytes(raw: &mut Vec<u8>) -> Option<Vec<u8>> {
         let raw_len = raw.len();
         if raw_len < FITS_RECORD_LEN {
-            return Err(FitsHeaderError::InvalidLength {
-                expected: FITS_RECORD_LEN,
-                found: raw_len,
-                intent: ["HDU ", &hdu_num.to_string(), " header"].concat(),
-            });
+            return None;
         }
-        Ok(raw.drain(0..FITS_RECORD_LEN).collect())
+        Some(raw.drain(0..FITS_RECORD_LEN).collect())
     }
 }
 
