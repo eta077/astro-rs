@@ -141,12 +141,12 @@ impl HduList {
     /// // non-empty header missing simple card
     /// let bitpix_card = FitsHeaderCard::from(*b"BITPIX  =                  -32 / FITS BITS/PIXEL                                ");
     /// hdu.header.cards.insert(0, bitpix_card);
+    /// hdu_list.push(hdu);
     /// assert!(!hdu_list.is_header_valid()?);
     ///
     /// // valid header
     /// let simple_card = FitsHeaderCard::from(*b"SIMPLE  =                    T / FITS STANDARD                                  ");
-    /// hdu.header.cards.insert(0, simple_card);
-    /// hdu_list.hdus.push(hdu);
+    /// hdu_list.first_mut().unwrap().header.cards.insert(0, simple_card);
     /// assert!(hdu_list.is_header_valid()?);
     /// # Ok::<(), astro_rs::fits::FitsHeaderError>(())
     /// ```

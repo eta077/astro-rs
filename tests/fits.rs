@@ -1,6 +1,6 @@
 use std::error::Error;
 use std::fs::File;
-use std::io::{BufReader, Read, Write};
+use std::io::{BufReader, Read};
 
 use astro_rs::fits::{hdu_types, HduList};
 
@@ -13,13 +13,8 @@ fn test_hdu_list_from_bytes() -> Result<(), Box<dyn Error>> {
         fits_file_reader.read_to_end(&mut fits_bytes)?;
 
         let mut hdu_list = HduList::from_bytes(fits_bytes.clone());
-        let hdu = hdu_list.first_mut().unwrap();
-        println!("first hdu has {} cards", hdu.header.cards.len());
         assert_eq!(hdu_list.iter_mut().count(), 2);
-        let my_bytes = hdu_list.to_bytes();
-        let mut result_file = File::create("test_results.txt").unwrap();
-        result_file.write_all(&mut my_bytes.clone()).unwrap();
-        assert!(my_bytes == fits_bytes);
+        assert!(hdu_list.to_bytes() == fits_bytes);
     }
 
     {

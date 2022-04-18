@@ -64,7 +64,7 @@ impl FitsHeader {
         let num_cards = raw_len / HEADER_CARD_LEN;
 
         let mut cards = Vec::with_capacity(num_cards);
-        while raw.len() > HEADER_CARD_LEN {
+        while raw.len() >= HEADER_CARD_LEN {
             let card_vec = raw.drain(0..HEADER_CARD_LEN).collect::<Vec<u8>>();
             let card_slice: [u8; 80] = card_vec[0..80].try_into().unwrap();
             cards.push(FitsHeaderCard::from(card_slice));
@@ -197,6 +197,22 @@ impl From<[u8; 8]> for FitsHeaderKeyword {
 impl From<FitsHeaderKeyword> for [u8; 8] {
     fn from(keyword: FitsHeaderKeyword) -> Self {
         keyword.raw
+    }
+}
+
+impl PartialEq<&str> for FitsHeaderKeyword {
+    fn eq(&self, other: &&str) -> bool {
+        if other.len() > HEADER_KEYWORD_LEN {
+            return false;
+        }
+        let other_bytes = other.as_bytes();
+        for (index, b) in self.raw.iter().enumerate() {
+            if b != other_bytes.get(index).unwrap_or(&b' ') {
+                return false;
+            }
+        }
+
+        true
     }
 }
 
