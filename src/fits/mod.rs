@@ -158,17 +158,17 @@ impl<R: Read> HduList<R> {
     /// # Panics
     ///
     /// Panics if `index` is out of bounds.
-    /// 
+    ///
     /// ```should_panic
     /// use astro_rs::fits::*;
-    /// 
+    ///
     /// let mut hdu_list = HduList::default();
     /// hdu_list.insert(1, hdu_types::image_hdu());
     /// ```
-    /// 
+    ///
     /// ```
     /// use astro_rs::fits::*;
-    /// 
+    ///
     /// let mut hdu_list = HduList::default();
     /// hdu_list.push(hdu_types::primary_hdu());
     /// hdu_list.insert(1, hdu_types::image_hdu());
@@ -188,10 +188,10 @@ impl<R: Read> HduList<R> {
     }
 
     /// Appends `hdu` to the end of the HDU list.
-    /// 
+    ///
     /// ```
     /// use astro_rs::fits::*;
-    /// 
+    ///
     /// let mut hdu_list = HduList::default();
     /// hdu_list.push(hdu_types::primary_hdu());
     /// assert_eq!(hdu_list.iter_mut().count(), 1);
@@ -206,18 +206,18 @@ impl<R: Read> HduList<R> {
     }
 
     /// Writes the HDU list via the given writer.
-    /// 
+    ///
     /// ```
     /// use astro_rs::fits::*;
     /// use std::io::*;
-    /// 
+    ///
     /// let in_cursor = Cursor::new(SIMPLE_KEYWORD.to_vec());
     /// let mut hdu_list = HduList::new(BufReader::new(in_cursor));
     /// let out_cursor = Cursor::new(Vec::new());
     /// let mut out_writer = BufWriter::new(out_cursor);
     /// hdu_list.write(&mut out_writer)?;
     /// assert_eq!(out_writer.get_ref().get_ref(), &SIMPLE_KEYWORD.to_vec());
-    /// 
+    ///
     /// # Ok::<(), std::io::Error>(())
     /// ```
     pub fn write<W: Write>(&mut self, writer: &mut BufWriter<W>) -> Result<(), std::io::Error> {
