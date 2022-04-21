@@ -213,8 +213,8 @@ impl FitsHeaderValue for u32 {
 /// // successful deserialization
 /// let value: String = FitsHeaderValue::from_bytes(String::from("hello world").into_bytes())?;
 /// assert_eq!(value, String::from("hello world"));
-/// let quote_value: String = FitsHeaderValue::from_bytes(String::from("this 'includes' '' quotes").into_bytes())?;
-/// assert_eq!(quote_value, String::from("this 'includes' '' quotes"));
+/// let quote_value: String = FitsHeaderValue::from_bytes(String::from("'this ''includes'' quotes'").into_bytes())?;
+/// assert_eq!(quote_value, String::from("this 'includes' quotes"));
 ///
 /// // failed deserialization
 /// let result: Result<String, FitsHeaderError> = FitsHeaderValue::from_bytes(vec![0, 159, 146, 150]);
@@ -222,11 +222,26 @@ impl FitsHeaderValue for u32 {
 ///
 /// // serialization
 /// assert_eq!(value.to_bytes(), *b"'hello world'                                                         ");
-/// assert_eq!(quote_value.to_bytes(), *b"'this 'includes' '' quotes'                                           ");
+/// assert_eq!(quote_value.to_bytes(), *b"'this ''includes'' quotes'                                            ");
 /// # Ok::<(), astro_rs::fits::FitsHeaderError>(())
 /// ```
 impl FitsHeaderValue for String {
-    fn from_bytes(raw: Vec<u8>) -> Result<Self, FitsHeaderError> {
+    fn from_bytes(mut raw: Vec<u8>) -> Result<Self, FitsHeaderError> {
+        let mut remove_quote = true;
+        let mut i = 0;
+        while i < raw.len() {
+            if raw[i] == b'\'' {
+                if remove_quote {
+                    raw.remove(i);
+                } else {
+                    i += 1;
+                }
+                remove_quote = false;
+            } else {
+                remove_quote = true;
+                i += 1;
+            }
+        }
         // TODO: account for escaping ' character
         String::from_utf8(raw).map_err(|er| FitsHeaderError::DeserializationError {
             found: er.into_bytes(),
@@ -237,11 +252,16 @@ impl FitsHeaderValue for String {
     fn to_bytes(&self) -> [u8; 70] {
         let mut result = [b' '; 70];
         result[0] = b'\'';
+        let mut num_quotes = 1;
         let value_raw = self.as_bytes();
         for (i, b) in value_raw.iter().enumerate() {
-            result[i + 1] = *b;
+            if *b == b'\'' {
+                result[i + num_quotes] = b'\'';
+                num_quotes += 1;
+            }
+            result[i + num_quotes] = *b;
         }
-        result[value_raw.len() + 1] = b'\'';
+        result[value_raw.len() + num_quotes] = b'\'';
         result
     }
 }

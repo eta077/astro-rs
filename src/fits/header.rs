@@ -105,7 +105,7 @@ impl FitsHeader {
 /// let card_raw = *b"SIMPLE  =                    T / FITS STANDARD                                  ";
 /// let mut card = FitsHeaderCard::from(card_raw);
 ///
-/// assert_eq!(*card.get_keyword(), "SIMPLE");
+/// assert_eq!(*card.keyword(), "SIMPLE");
 /// // deserializes value and comment, discarding padding
 /// assert_eq!(*card.get_value::<bool>()?, true);
 /// assert_eq!(*card.get_comment()?, String::from("FITS STANDARD"));
@@ -123,7 +123,7 @@ pub struct FitsHeaderCard {
 
 impl FitsHeaderCard {
     /// Gets the keyword of the header card.
-    pub fn get_keyword(&self) -> &FitsHeaderKeyword {
+    pub fn keyword(&self) -> &FitsHeaderKeyword {
         &self.keyword
     }
 

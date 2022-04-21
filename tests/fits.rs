@@ -15,7 +15,7 @@ fn test_hdu_list_from_bytes() -> Result<(), Box<dyn Error>> {
         let in_cursor = Cursor::new(fits_bytes.clone());
         let mut hdu_list = HduList::new(BufReader::new(in_cursor));
         assert_eq!(hdu_list.iter_mut().count(), 2);
-        let out_cursor = Cursor::new(Vec::<u8>::new());
+        let out_cursor = Cursor::new(Vec::new());
         let mut out_writer = BufWriter::new(out_cursor);
         hdu_list.write(&mut out_writer)?;
         assert_eq!(out_writer.get_ref().get_ref(), &fits_bytes);
@@ -30,7 +30,7 @@ fn test_hdu_list_from_bytes() -> Result<(), Box<dyn Error>> {
         let in_cursor = Cursor::new(fits_bytes.clone());
         let mut hdu_list = HduList::new(BufReader::new(in_cursor));
         assert_eq!(hdu_list.iter_mut().count(), 2);
-        let out_cursor = Cursor::new(Vec::<u8>::new());
+        let out_cursor = Cursor::new(Vec::new());
         let mut out_writer = BufWriter::new(out_cursor);
         hdu_list.write(&mut out_writer)?;
         assert_eq!(out_writer.get_ref().get_ref(), &fits_bytes);
