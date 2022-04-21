@@ -1,5 +1,5 @@
 use std::fs::File;
-use std::io::{BufReader, Read};
+use std::io::BufReader;
 
 use astro_rs::fits::*;
 
@@ -9,12 +9,10 @@ fn bench_get_header(c: &mut Criterion) {
     c.bench_function("get header from fits file", |b| {
         b.iter(|| {
             let fits_file = black_box(File::open("assets/benchmarks/many_hdu.fits").unwrap());
-            let mut fits_file_reader = BufReader::new(fits_file);
-            let mut fits_bytes = Vec::new();
-            fits_file_reader.read_to_end(&mut fits_bytes).unwrap();
+            let fits_file_reader = BufReader::new(fits_file);
 
-            let hdu_list = HduList::from_bytes(fits_bytes.clone()).unwrap();
-            hdu_list.hdus.first().unwrap().header.clone()
+            let mut hdu_list = HduList::new(fits_file_reader);
+            hdu_list.first_mut().unwrap().header.clone()
         })
     });
 }
