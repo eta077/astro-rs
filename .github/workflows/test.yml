@@ -1,10 +1,10 @@
 on:
   push:
     branches:
-      - release
+      - main, release
   pull_request:
     branches:
-      - release
+      - main, release
 
 name: Test
 
