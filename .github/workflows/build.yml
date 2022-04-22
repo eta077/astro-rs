@@ -1,10 +1,12 @@
 on:
   push:
     branches:
-      - main, release
+      - main
+      - release
   pull_request:
     branches:
-      - main, release
+      - main
+      - release
 
 name: Build
 
