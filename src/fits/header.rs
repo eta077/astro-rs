@@ -9,9 +9,9 @@ use thiserror::Error;
 
 /// The expected keyword for the first header card of the primary HDU.
 pub const SIMPLE_KEYWORD: [u8; 8] = *b"SIMPLE  ";
-/// The header keyword indicating the size of each value in the HDU data.
+/// The header keyword indicating the size of each value in the HDU data section.
 pub const BITPIX_KEYWORD: [u8; 8] = *b"BITPIX  ";
-/// The header keyword indicating how many axes are present in the HDU data.
+/// The header keyword indicating how many axes are present in the HDU data section.
 pub const NAXIS_KEYWORD: [u8; 8] = *b"NAXIS   ";
 /// The header keyword indicating the end of the header section.
 pub const END_KEYWORD: [u8; 8] = *b"END     ";
@@ -45,10 +45,11 @@ pub enum FitsHeaderError {
     },
 }
 
-/// A representation of the header portion of an HDU.
-#[derive(Debug, Default)]
+/// The header portion of an HDU.
+#[derive(Debug, Default, Clone)]
 pub struct FitsHeader {
-    cards: Vec<FitsHeaderCard>,
+    /// The card images contained in the header.
+    pub cards: Vec<FitsHeaderCard>,
 }
 
 impl FitsHeader {
@@ -58,25 +59,18 @@ impl FitsHeader {
     }
 
     /// Constructs a FitsHeader from the given bytes.
-    pub fn from_bytes(mut raw: Vec<u8>) -> Result<FitsHeader, FitsHeaderError> {
+    pub fn from_bytes(mut raw: Vec<u8>) -> FitsHeader {
         let raw_len = raw.len();
         let num_cards = raw_len / HEADER_CARD_LEN;
-        if raw_len % HEADER_CARD_LEN != 0 {
-            return Err(FitsHeaderError::InvalidLength {
-                expected: (num_cards + 1) * HEADER_CARD_LEN,
-                found: raw_len,
-                intent: String::from("FITS header"),
-            });
-        }
 
         let mut cards = Vec::with_capacity(num_cards);
-        while !raw.is_empty() {
+        while raw.len() >= HEADER_CARD_LEN {
             let card_vec = raw.drain(0..HEADER_CARD_LEN).collect::<Vec<u8>>();
             let card_slice: [u8; 80] = card_vec[0..80].try_into().unwrap();
             cards.push(FitsHeaderCard::from(card_slice));
         }
 
-        Ok(FitsHeader { cards })
+        FitsHeader { cards }
     }
 
     /// Serializes the header into bytes.
@@ -101,14 +95,9 @@ impl FitsHeader {
         }
         None
     }
-
-    /// Inserts the given card at the given index, shifting all subsequent elements right.
-    pub fn insert_card(&mut self, index: usize, card: FitsHeaderCard) {
-        self.cards.insert(index, card);
-    }
 }
 
-/// A representation of a card within an HDU header section.
+/// A card within an HDU header section.
 ///
 /// ```
 /// use astro_rs::fits::FitsHeaderCard;
@@ -116,7 +105,7 @@ impl FitsHeader {
 /// let card_raw = *b"SIMPLE  =                    T / FITS STANDARD                                  ";
 /// let mut card = FitsHeaderCard::from(card_raw);
 ///
-/// assert_eq!(*card.get_keyword(), "SIMPLE");
+/// assert_eq!(*card.keyword(), "SIMPLE");
 /// // deserializes value and comment, discarding padding
 /// assert_eq!(*card.get_value::<bool>()?, true);
 /// assert_eq!(*card.get_comment()?, String::from("FITS STANDARD"));
@@ -126,7 +115,7 @@ impl FitsHeader {
 /// assert_eq!(comparison, card_raw);
 /// # Ok::<(), astro_rs::fits::FitsHeaderError>(())
 /// ```
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FitsHeaderCard {
     keyword: FitsHeaderKeyword,
     value: FitsHeaderValueContainer,
@@ -134,7 +123,7 @@ pub struct FitsHeaderCard {
 
 impl FitsHeaderCard {
     /// Gets the keyword of the header card.
-    pub fn get_keyword(&self) -> &FitsHeaderKeyword {
+    pub fn keyword(&self) -> &FitsHeaderKeyword {
         &self.keyword
     }
 
@@ -181,7 +170,8 @@ impl From<FitsHeaderCard> for [u8; 80] {
     }
 }
 
-/// A representation of a FITS header keyword.
+/// A FITS header keyword.
+/// This wrapper provides functions to interact with both raw arrays and strings.
 ///
 /// ```
 /// use astro_rs::fits::FitsHeaderKeyword;
@@ -226,6 +216,22 @@ impl PartialEq<&str> for FitsHeaderKeyword {
     }
 }
 
+impl PartialEq<str> for FitsHeaderKeyword {
+    fn eq(&self, other: &str) -> bool {
+        if other.len() > HEADER_KEYWORD_LEN {
+            return false;
+        }
+        let other_bytes = other.as_bytes();
+        for (index, b) in self.raw.iter().enumerate() {
+            if b != other_bytes.get(index).unwrap_or(&b' ') {
+                return false;
+            }
+        }
+
+        true
+    }
+}
+
 impl PartialEq<[u8; 8]> for FitsHeaderKeyword {
     fn eq(&self, other: &[u8; 8]) -> bool {
         self.raw == *other
@@ -233,8 +239,8 @@ impl PartialEq<[u8; 8]> for FitsHeaderKeyword {
 }
 
 /// A representation of the combined header card value and comment.
-/// The total number of bytes between the value and comment must not exceed 72.
-#[derive(Debug)]
+/// This wrapper ensures that the total number of bytes between the value and comment will not exceed 72.
+#[derive(Debug, Clone)]
 pub struct FitsHeaderValueContainer {
     raw: Vec<u8>,
     value: Option<Rc<dyn FitsHeaderValue>>,
@@ -276,10 +282,10 @@ impl FitsHeaderValueContainer {
     /// Gets the comment section of the header card.
     ///
     /// ```
-    /// use astro_rs::fits::FitsHeaderCard;
+    /// use astro_rs::fits::FitsHeaderValueContainer;
     ///
-    /// let mut card = FitsHeaderCard::from(*b"SIMPLE  =                    T / FITS STANDARD                                  ");
-    /// assert_eq!(*card.get_comment()?, String::from("FITS STANDARD"));
+    /// let mut card_value = FitsHeaderValueContainer::from(*b"=                    T / FITS STANDARD                                  ");
+    /// assert_eq!(*card_value.get_comment()?, String::from("FITS STANDARD"));
     /// # Ok::<(), astro_rs::fits::FitsHeaderError>(())
     /// ```
     pub fn get_comment(&mut self) -> Result<Rc<String>, FitsHeaderError> {
