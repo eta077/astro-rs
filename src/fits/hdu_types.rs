@@ -117,7 +117,7 @@ pub mod image_hdu {
     }
 }
 
-/// Functions related to an Image type HDU.
+/// Functions related to a Binary Table type HDU.
 pub mod binary_table_hdu {
     use super::*;
     use crate::fits::header_value::TForm;
