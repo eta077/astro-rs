@@ -1,7 +1,7 @@
 //! Serialize and deserialize FITS data.
 //! See https://archive.stsci.edu/fits/fits_standard/fits_standard.html for the FITS API.
 
-pub mod hdu_types;
+mod hdu_types;
 mod header;
 mod header_value;
 
@@ -10,6 +10,7 @@ use std::io::{BufReader, BufWriter, Cursor, Read, Write};
 use std::rc::Rc;
 use std::slice::IterMut;
 
+pub use hdu_types::*;
 pub use header::*;
 pub use header_value::*;
 
@@ -50,7 +51,7 @@ impl<R: Read> HduList<R> {
     /// let mut hdu_list = HduList::default();
     /// assert!(hdu_list.get_by_index(0).is_none());
     ///
-    /// hdu_list.push(hdu_types::primary_hdu());
+    /// hdu_list.push(primary_hdu::default());
     /// assert!(hdu_list.get_by_index(0).is_some());
     /// ```
     pub fn get_by_index(&mut self, index: usize) -> Option<&mut Hdu> {
@@ -74,14 +75,14 @@ impl<R: Read> HduList<R> {
     /// assert!(hdu_list.get_by_name("hdu_name").is_none());
     ///
     /// // name does not match
-    /// let mut img_hdu = hdu_types::image_hdu();
+    /// let mut img_hdu = image_hdu::default();
     /// let name_card = FitsHeaderCard::from(*b"EXTNAME = 'name_of_hdu'                                                         ");
     /// img_hdu.header.cards.insert(img_hdu.header.cards.len() - 1, name_card);
     /// hdu_list.push(img_hdu);
     /// assert!(hdu_list.get_by_name("hdu_name").is_none());
     ///
     /// // name matches
-    /// let mut img_hdu = hdu_types::image_hdu();
+    /// let mut img_hdu = image_hdu::default();
     /// let name_card = FitsHeaderCard::from(*b"EXTNAME = 'hdu_name'                                                            ");
     /// img_hdu.header.cards.insert(img_hdu.header.cards.len() - 1, name_card);
     /// hdu_list.push(img_hdu);
@@ -97,6 +98,7 @@ impl<R: Read> HduList<R> {
                 loop {
                     let mut new_hdu = self.read_hdu()?;
                     if new_hdu.get_name() == name {
+                        self.hdus.push(new_hdu);
                         break;
                     }
 
@@ -117,7 +119,7 @@ impl<R: Read> HduList<R> {
     /// let mut hdu_list = HduList::default();
     /// assert!(hdu_list.first_mut().is_none());
     ///
-    /// hdu_list.push(hdu_types::primary_hdu());
+    /// hdu_list.push(primary_hdu::default());
     /// assert!(hdu_list.first_mut().is_some());
     /// ```
     pub fn first_mut(&mut self) -> Option<&mut Hdu> {
@@ -134,7 +136,7 @@ impl<R: Read> HduList<R> {
     /// use astro_rs::fits::*;
     ///
     /// let mut hdu_list = HduList::default();
-    /// hdu_list.push(hdu_types::primary_hdu());
+    /// hdu_list.push(primary_hdu::default());
     ///
     /// // find the primary HDU
     /// assert!(hdu_list
@@ -163,15 +165,15 @@ impl<R: Read> HduList<R> {
     /// use astro_rs::fits::*;
     ///
     /// let mut hdu_list = HduList::default();
-    /// hdu_list.insert(1, hdu_types::image_hdu());
+    /// hdu_list.insert(1, image_hdu::default());
     /// ```
     ///
     /// ```
     /// use astro_rs::fits::*;
     ///
     /// let mut hdu_list = HduList::default();
-    /// hdu_list.push(hdu_types::primary_hdu());
-    /// hdu_list.insert(1, hdu_types::image_hdu());
+    /// hdu_list.push(primary_hdu::default());
+    /// hdu_list.insert(1, image_hdu::default());
     /// assert_eq!(hdu_list.iter_mut().count(), 2);
     /// ```
     pub fn insert(&mut self, index: usize, hdu: Hdu) {
@@ -193,9 +195,9 @@ impl<R: Read> HduList<R> {
     /// use astro_rs::fits::*;
     ///
     /// let mut hdu_list = HduList::default();
-    /// hdu_list.push(hdu_types::primary_hdu());
+    /// hdu_list.push(primary_hdu::default());
     /// assert_eq!(hdu_list.iter_mut().count(), 1);
-    /// hdu_list.push(hdu_types::image_hdu());
+    /// hdu_list.push(image_hdu::default());
     /// assert_eq!(hdu_list.iter_mut().count(), 2);
     /// ```
     pub fn push(&mut self, hdu: Hdu) {
@@ -376,20 +378,19 @@ impl Hdu {
     /// ```
     /// use astro_rs::fits::*;
     ///
-    /// let mut img_hdu = hdu_types::image_hdu();
+    /// let mut img_hdu = image_hdu::default();
     /// let name_card = FitsHeaderCard::from(*b"EXTNAME = 'hdu_name'                                                            ");
     /// img_hdu.header.cards.insert(img_hdu.header.cards.len() - 1, name_card);
     /// assert_eq!(img_hdu.get_name(), String::from("hdu_name"));
     /// ```
     pub fn get_name(&mut self) -> String {
-        let value = self
-            .header
+        self.header
             .cards
             .iter_mut()
             .find(|card| *card.keyword() == EXTNAME_KEYWORD)
             .and_then(|card| card.get_value::<String>().ok())
-            .unwrap_or_default();
-        (*value).clone()
+            .map(|name| name.trim().to_owned())
+            .unwrap_or_default()
     }
 
     /// Gets the data section of the HDU.

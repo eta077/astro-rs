@@ -242,11 +242,11 @@ impl FitsHeaderValue for String {
                 i += 1;
             }
         }
-        // TODO: account for escaping ' character
-        String::from_utf8(raw).map_err(|er| FitsHeaderError::DeserializationError {
+        let value = String::from_utf8(raw).map_err(|er| FitsHeaderError::DeserializationError {
             found: er.into_bytes(),
             intent: String::from("header card String value"),
-        })
+        })?;
+        Ok(value.trim().to_owned())
     }
 
     fn to_bytes(&self) -> [u8; 70] {
@@ -341,6 +341,290 @@ impl FitsHeaderValue for Bitpix {
                     result[start + i] = *b;
                 }
             }
+        }
+        result
+    }
+}
+
+/// An enumeration of valid types corresponding to the TFORM keyword.
+#[allow(missing_docs)]
+#[derive(Debug, Clone, Copy)]
+pub enum TFormType {
+    Logical,
+    Bit,
+    UnsignedByte,
+    I16,
+    I32,
+    Character,
+    F32,
+    F64,
+    C64,
+    C128,
+    ArrayDescriptor,
+}
+
+impl TryFrom<char> for TFormType {
+    type Error = FitsHeaderError;
+
+    fn try_from(value: char) -> Result<Self, Self::Error> {
+        match value {
+            'L' => Ok(TFormType::Logical),
+            'X' => Ok(TFormType::Bit),
+            'B' => Ok(TFormType::UnsignedByte),
+            'I' => Ok(TFormType::I16),
+            'J' => Ok(TFormType::I32),
+            'A' => Ok(TFormType::Character),
+            'E' => Ok(TFormType::F32),
+            'D' => Ok(TFormType::F64),
+            'C' => Ok(TFormType::C64),
+            'M' => Ok(TFormType::C128),
+            'P' => Ok(TFormType::ArrayDescriptor),
+            _ => Err(FitsHeaderError::DeserializationError {
+                found: vec![value as u8],
+                intent: String::from("header card TFORM type value"),
+            }),
+        }
+    }
+}
+
+/// A value corresponding to the TFORM keyword.
+#[derive(Debug, Clone)]
+pub struct TForm {
+    /// The repeat count
+    pub r: usize,
+    /// The field type
+    pub t: TFormType,
+    /// Undefined additional characters
+    pub a: String,
+}
+
+impl TForm {
+    /// Gets the number of bytes required by the column.
+    pub fn value(&self) -> usize {
+        let type_bytes = match self.t {
+            TFormType::Logical => 1,
+            TFormType::Bit => todo!(),
+            TFormType::UnsignedByte => 1,
+            TFormType::I16 => 2,
+            TFormType::I32 => 4,
+            TFormType::Character => 1,
+            TFormType::F32 => 4,
+            TFormType::F64 => 8,
+            TFormType::C64 => 8,
+            TFormType::C128 => 16,
+            TFormType::ArrayDescriptor => 8,
+        };
+        self.r * type_bytes
+    }
+
+    /// Gets the function to transform raw bytes to the given type.
+    pub fn get_values<T>(
+        &self,
+        data: &[u8],
+        column_start: usize,
+        row_len: usize,
+        num_rows: usize,
+    ) -> Box<Vec<T>> {
+        let column_len = self.value();
+        unsafe {
+            match self.t {
+                TFormType::Logical => {
+                    let mut result = Vec::with_capacity(num_rows * self.r);
+                    for i in 0..num_rows {
+                        let start = row_len * i + column_start;
+                        let column = data[start..start + column_len].to_vec();
+                        for value in column.iter().take(self.r) {
+                            result.push(*value != 0);
+                        }
+                    }
+
+                    let b = Box::new(result);
+                    let ptr = Box::into_raw(b);
+                    let new_ptr = ptr.cast();
+                    Box::from_raw(new_ptr)
+                }
+                TFormType::Bit => todo!(),
+                TFormType::UnsignedByte => {
+                    let mut result = Vec::with_capacity(num_rows);
+                    for i in 0..num_rows {
+                        let start = row_len * i + column_start;
+                        let mut column = data[start..start + column_len].to_vec();
+                        result.append(&mut column);
+                    }
+
+                    let b = Box::new(result);
+                    let ptr = Box::into_raw(b);
+                    let new_ptr = ptr.cast();
+                    Box::from_raw(new_ptr)
+                }
+                TFormType::I16 => {
+                    let mut result = Vec::with_capacity(num_rows);
+                    for i in 0..num_rows {
+                        let start = row_len * i + column_start;
+                        let column = data[start..start + column_len].to_vec();
+                        let value_size = std::mem::size_of::<i16>();
+                        for repeat in 0..self.r {
+                            let value_start = repeat * value_size;
+                            let value = i16::from_be_bytes(
+                                column[value_start..value_start + value_size]
+                                    .try_into()
+                                    .unwrap(),
+                            );
+                            result.push(value);
+                        }
+                    }
+
+                    let b = Box::new(result);
+                    let ptr = Box::into_raw(b);
+                    let new_ptr = ptr.cast();
+                    Box::from_raw(new_ptr)
+                }
+                TFormType::I32 => {
+                    let mut result = Vec::with_capacity(num_rows);
+                    for i in 0..num_rows {
+                        let start = row_len * i + column_start;
+                        let column = data[start..start + column_len].to_vec();
+                        let value_size = std::mem::size_of::<i32>();
+                        for repeat in 0..self.r {
+                            let value_start = repeat * value_size;
+                            let value = i32::from_be_bytes(
+                                column[value_start..value_start + value_size]
+                                    .try_into()
+                                    .unwrap(),
+                            );
+                            result.push(value);
+                        }
+                    }
+
+                    let b = Box::new(result);
+                    let ptr = Box::into_raw(b);
+                    let new_ptr = ptr.cast();
+                    Box::from_raw(new_ptr)
+                }
+                TFormType::Character => {
+                    let mut result = Vec::with_capacity(num_rows);
+                    for i in 0..num_rows {
+                        let start = row_len * i + column_start;
+                        let column = data[start..start + column_len].to_vec();
+                        let value_size = std::mem::size_of::<char>();
+                        for repeat in 0..self.r {
+                            let value_start = repeat * value_size;
+                            let value = char::from_u32_unchecked(u32::from_be_bytes(
+                                column[value_start..value_start + value_size]
+                                    .try_into()
+                                    .unwrap(),
+                            ));
+                            result.push(value);
+                        }
+                    }
+
+                    let b = Box::new(result);
+                    let ptr = Box::into_raw(b);
+                    let new_ptr = ptr.cast();
+                    Box::from_raw(new_ptr)
+                }
+                TFormType::F32 => {
+                    let mut result = Vec::with_capacity(num_rows);
+                    for i in 0..num_rows {
+                        let start = row_len * i + column_start;
+                        let column = data[start..start + column_len].to_vec();
+                        let value_size = std::mem::size_of::<f32>();
+                        for repeat in 0..self.r {
+                            let value_start = repeat * value_size;
+                            let value = f32::from_be_bytes(
+                                column[value_start..value_start + value_size]
+                                    .try_into()
+                                    .unwrap(),
+                            );
+                            result.push(value);
+                        }
+                    }
+
+                    let b = Box::new(result);
+                    let ptr = Box::into_raw(b);
+                    let new_ptr = ptr.cast();
+                    Box::from_raw(new_ptr)
+                }
+                TFormType::F64 => {
+                    let mut result = Vec::with_capacity(num_rows);
+                    for i in 0..num_rows {
+                        let start = row_len * i + column_start;
+                        let chunk = data[start..start + column_len].to_vec();
+                        result.push(f64::from_be_bytes(chunk.try_into().unwrap()));
+                    }
+
+                    let b = Box::new(result);
+                    let ptr = Box::into_raw(b);
+                    let new_ptr = ptr.cast();
+                    Box::from_raw(new_ptr)
+                }
+                TFormType::C64 => todo!(),
+                TFormType::C128 => todo!(),
+                TFormType::ArrayDescriptor => todo!(),
+            }
+        }
+    }
+}
+
+impl FitsHeaderValue for TForm {
+    fn from_bytes(raw: Vec<u8>) -> Result<Self, FitsHeaderError> {
+        let mut repeats = String::new();
+        let mut ttype = None;
+        let mut i = 1;
+        while i < raw.len() - 1 {
+            let ch = raw[i] as char;
+            if ch.is_ascii_digit() {
+                repeats.push(ch);
+                i += 1;
+            } else {
+                ttype = Some(TFormType::try_from(ch)?);
+                i += 1;
+                break;
+            }
+        }
+        let r = repeats.parse::<u32>().unwrap_or(1) as usize;
+        if let Some(t) = ttype {
+            if let Ok(a) = String::from_utf8(raw[i..raw.len() - 1].to_vec()) {
+                return Ok(TForm {
+                    r,
+                    t,
+                    a: a.trim().to_owned(),
+                });
+            }
+        }
+        Err(FitsHeaderError::DeserializationError {
+            found: raw,
+            intent: String::from("header card TFORM value"),
+        })
+    }
+
+    fn to_bytes(&self) -> [u8; 70] {
+        let mut result = [b' '; 70];
+        let mut i = 0;
+        result[i] = b'\'';
+        i += 1;
+        let repeats = self.r.to_string();
+        for b in repeats.bytes() {
+            result[i] = b;
+            i += 1;
+        }
+        match self.t {
+            TFormType::Logical => result[i] = b'L',
+            TFormType::Bit => result[i] = b'X',
+            TFormType::UnsignedByte => result[i] = b'B',
+            TFormType::I16 => result[i] = b'I',
+            TFormType::I32 => result[i] = b'J',
+            TFormType::Character => result[i] = b'A',
+            TFormType::F32 => result[i] = b'E',
+            TFormType::F64 => result[i] = b'D',
+            TFormType::C64 => result[i] = b'C',
+            TFormType::C128 => result[i] = b'M',
+            TFormType::ArrayDescriptor => result[i] = b'P',
+        }
+        i += 1;
+        for b in self.a.bytes() {
+            result[i] = b;
+            i += 1;
         }
         result
     }

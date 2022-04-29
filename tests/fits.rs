@@ -2,7 +2,7 @@ use std::error::Error;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Cursor, Read};
 
-use astro_rs::fits::{hdu_types, HduList};
+use astro_rs::fits::*;
 
 #[test]
 fn test_hdu_list_from_bytes() -> Result<(), Box<dyn Error>> {
@@ -42,10 +42,25 @@ fn test_hdu_list_from_bytes() -> Result<(), Box<dyn Error>> {
 #[test]
 fn test_hdu_list_new() -> Result<(), Box<dyn Error>> {
     let mut hdu_list = HduList::default();
-    hdu_list.push(hdu_types::primary_hdu());
-    hdu_list.push(hdu_types::image_hdu());
+    hdu_list.push(primary_hdu::default());
+    hdu_list.push(image_hdu::default());
 
     assert!(hdu_list.is_header_valid()?);
+
+    Ok(())
+}
+
+#[test]
+fn test_hdu_table_column() -> Result<(), Box<dyn Error>> {
+    let fits_file =
+        File::open("assets/CDA/science/ao23/cat9/25975/primary/acisf25975N002_evt2.fits")?;
+    let fits_file_reader = BufReader::new(fits_file);
+    let mut hdu_list = HduList::new(fits_file_reader);
+    let table_hdu = hdu_list.get_by_name("EVENTS").unwrap();
+    let energy_data = binary_table_hdu::column_by_name::<f32>(table_hdu, "energy").unwrap();
+    let energy_average = energy_data.iter().sum::<f32>() / energy_data.len() as f32;
+
+    assert_eq!(energy_average, 9012.468);
 
     Ok(())
 }

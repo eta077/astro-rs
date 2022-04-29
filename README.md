@@ -13,4 +13,6 @@ Inspired by Astropy (http://astropy.org / https://github.com/astropy/astropy)
 * Balance 'tight' (https://www.ecorax.net/tightness) types and adherance to the FITS API with graceful handling of deviation
 
 # Testing
-Test assets are from https://esahubble.org/projects/fits_liberator/datasets_archives
+Test assets are from the following sources:
+* https://esahubble.org/projects/fits_liberator/datasets_archives
+* https://cxc.harvard.edu/cda/
