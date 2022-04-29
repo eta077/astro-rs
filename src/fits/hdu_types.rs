@@ -209,8 +209,7 @@ pub mod binary_table_hdu {
                     keyword[i] = (n % 10 + 48) as u8;
                     if let Some(card) = hdu.header.get_card(keyword) {
                         if let Ok(value) = card.get_value::<String>() {
-                            // TODO: ignore case
-                            if value.as_str() == name {
+                            if value.eq_ignore_ascii_case(name) {
                                 tform = Some(tform_value);
                                 break;
                             }
