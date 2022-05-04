@@ -188,6 +188,51 @@ pub struct FitsHeaderKeyword {
     raw: [u8; 8],
 }
 
+impl FitsHeaderKeyword {
+    /// Appends the given number to the keyword.
+    /// If a number is already appended, it is replaced by the given number.
+    ///
+    /// ```
+    /// use astro_rs::fits::*;
+    ///
+    /// let mut naxis_keyword = FitsHeaderKeyword::from(NAXIS_KEYWORD);
+    /// naxis_keyword.append_number(1);
+    /// assert_eq!(naxis_keyword, "NAXIS1");
+    /// naxis_keyword.append_number(2);
+    /// assert_eq!(naxis_keyword, "NAXIS2");
+    ///
+    /// let mut tform_keyword = FitsHeaderKeyword::from(TFORM_KEYWORD);
+    /// tform_keyword.append_number(100);
+    /// assert_eq!(tform_keyword, "TFORM100");
+    /// tform_keyword.append_number(10);
+    /// assert_eq!(tform_keyword, "TFORM10");
+    /// ```
+    pub fn append_number(&mut self, number: u16) {
+        let mut i = 0;
+        while i < 8 {
+            let c = self.raw[i];
+            if c == b' ' || c.is_ascii_digit() {
+                break;
+            }
+            i += 1;
+        }
+        if number > 99 {
+            self.raw[i] = (number / 100 + 48) as u8;
+            i += 1;
+        }
+        if number > 9 {
+            self.raw[i] = (number % 100 / 10 + 48) as u8;
+            i += 1;
+        }
+        self.raw[i] = (number % 10 + 48) as u8;
+        i += 1;
+        while i < 8 {
+            self.raw[i] = b' ';
+            i += 1;
+        }
+    }
+}
+
 impl From<[u8; 8]> for FitsHeaderKeyword {
     fn from(raw: [u8; 8]) -> Self {
         FitsHeaderKeyword { raw }
