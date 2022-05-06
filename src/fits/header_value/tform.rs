@@ -1,6 +1,6 @@
 //! Defines the TFORM header value.
 
-use crate::fits::FitsHeaderError;
+use crate::{deserialize_column, fits::FitsHeaderError, return_box};
 
 use super::FitsHeaderValue;
 
@@ -96,10 +96,7 @@ impl TForm {
                         }
                     }
 
-                    let b = Box::new(result);
-                    let ptr = Box::into_raw(b);
-                    let new_ptr = ptr.cast();
-                    Box::from_raw(new_ptr)
+                    return_box!(result)
                 }
                 TFormType::Bit => todo!(),
                 TFormType::UnsignedByte => {
@@ -110,117 +107,145 @@ impl TForm {
                         result.append(&mut column);
                     }
 
-                    let b = Box::new(result);
-                    let ptr = Box::into_raw(b);
-                    let new_ptr = ptr.cast();
-                    Box::from_raw(new_ptr)
+                    return_box!(result)
                 }
                 TFormType::I16 => {
-                    let mut result = Vec::with_capacity(num_rows * self.r);
-                    for i in 0..num_rows {
-                        let start = row_len * i + column_start;
-                        let column = data[start..start + column_len].to_vec();
-                        let value_size = std::mem::size_of::<i16>();
-                        for repeat in 0..self.r {
-                            let value_start = repeat * value_size;
-                            let value = i16::from_be_bytes(
-                                column[value_start..value_start + value_size]
-                                    .try_into()
-                                    .unwrap(),
-                            );
-                            result.push(value);
-                        }
-                    }
-
-                    let b = Box::new(result);
-                    let ptr = Box::into_raw(b);
-                    let new_ptr = ptr.cast();
-                    Box::from_raw(new_ptr)
+                    deserialize_column!(
+                        i16,
+                        num_rows,
+                        row_len,
+                        column_start,
+                        column_len,
+                        self.r,
+                        data,
+                    )
                 }
                 TFormType::I32 => {
-                    let mut result = Vec::with_capacity(num_rows * self.r);
-                    for i in 0..num_rows {
-                        let start = row_len * i + column_start;
-                        let column = data[start..start + column_len].to_vec();
-                        let value_size = std::mem::size_of::<i32>();
-                        for repeat in 0..self.r {
-                            let value_start = repeat * value_size;
-                            let value = i32::from_be_bytes(
-                                column[value_start..value_start + value_size]
-                                    .try_into()
-                                    .unwrap(),
-                            );
-                            result.push(value);
-                        }
-                    }
-
-                    let b = Box::new(result);
-                    let ptr = Box::into_raw(b);
-                    let new_ptr = ptr.cast();
-                    Box::from_raw(new_ptr)
+                    deserialize_column!(
+                        i32,
+                        num_rows,
+                        row_len,
+                        column_start,
+                        column_len,
+                        self.r,
+                        data,
+                    )
                 }
                 TFormType::Character => {
-                    let mut result = Vec::with_capacity(num_rows * self.r);
-                    for i in 0..num_rows {
-                        let start = row_len * i + column_start;
-                        let column = data[start..start + column_len].to_vec();
-                        let value_size = std::mem::size_of::<char>();
-                        for repeat in 0..self.r {
-                            let value_start = repeat * value_size;
-                            let value = char::from_u32_unchecked(u32::from_be_bytes(
-                                column[value_start..value_start + value_size]
-                                    .try_into()
-                                    .unwrap(),
-                            ));
-                            result.push(value);
-                        }
+                    unsafe fn deserialize_char(value: [u8; 4]) -> char {
+                        char::from_u32_unchecked(u32::from_be_bytes(value))
                     }
-
-                    let b = Box::new(result);
-                    let ptr = Box::into_raw(b);
-                    let new_ptr = ptr.cast();
-                    Box::from_raw(new_ptr)
+                    deserialize_column!(
+                        char,
+                        num_rows,
+                        row_len,
+                        column_start,
+                        column_len,
+                        self.r,
+                        data,
+                        deserialize_char,
+                    )
                 }
                 TFormType::F32 => {
-                    let mut result = Vec::with_capacity(num_rows * self.r);
-                    for i in 0..num_rows {
-                        let start = row_len * i + column_start;
-                        let column = data[start..start + column_len].to_vec();
-                        let value_size = std::mem::size_of::<f32>();
-                        for repeat in 0..self.r {
-                            let value_start = repeat * value_size;
-                            let value = f32::from_be_bytes(
-                                column[value_start..value_start + value_size]
-                                    .try_into()
-                                    .unwrap(),
-                            );
-                            result.push(value);
-                        }
-                    }
-
-                    let b = Box::new(result);
-                    let ptr = Box::into_raw(b);
-                    let new_ptr = ptr.cast();
-                    Box::from_raw(new_ptr)
+                    deserialize_column!(
+                        f32,
+                        num_rows,
+                        row_len,
+                        column_start,
+                        column_len,
+                        self.r,
+                        data,
+                    )
                 }
                 TFormType::F64 => {
-                    let mut result = Vec::with_capacity(num_rows * self.r);
-                    for i in 0..num_rows {
-                        let start = row_len * i + column_start;
-                        let chunk = data[start..start + column_len].to_vec();
-                        result.push(f64::from_be_bytes(chunk.try_into().unwrap()));
-                    }
-
-                    let b = Box::new(result);
-                    let ptr = Box::into_raw(b);
-                    let new_ptr = ptr.cast();
-                    Box::from_raw(new_ptr)
+                    deserialize_column!(
+                        f64,
+                        num_rows,
+                        row_len,
+                        column_start,
+                        column_len,
+                        self.r,
+                        data,
+                    )
                 }
                 TFormType::C64 => todo!(),
                 TFormType::C128 => todo!(),
                 TFormType::ArrayDescriptor => todo!(),
             }
         }
+    }
+}
+
+mod tform_macros {
+    /// Creates a box of the given value and casts it to an implicit return type.
+    #[macro_export]
+    macro_rules! return_box {
+        ($result: expr) => {{
+            let b = Box::new($result);
+            let ptr = Box::into_raw(b);
+            let new_ptr = ptr.cast();
+            Box::from_raw(new_ptr)
+        }};
+    }
+
+    /// Creates a boxed vector deserialized with the given function, or a default function if one is not given.
+    #[macro_export]
+    macro_rules! deserialize_column {
+        ($value_type: ty, $num_rows: expr, $row_len: expr, $column_start: expr, $column_len: expr, $repeats: expr, $data: expr, $deserialize_fn: tt,) => {{
+            $crate::do_deserialize_column!(
+                $value_type,
+                $num_rows,
+                $row_len,
+                $column_start,
+                $column_len,
+                $repeats,
+                $data,
+                $deserialize_fn
+            )
+        }};
+        ($value_type: ty, $num_rows: expr, $row_len: expr, $column_start: expr, $column_len: expr, $repeats: expr, $data: expr,) => {{
+            let deserialize_fn = $crate::default_deserialize_fn!($value_type);
+            $crate::do_deserialize_column!(
+                $value_type,
+                $num_rows,
+                $row_len,
+                $column_start,
+                $column_len,
+                $repeats,
+                $data,
+                deserialize_fn
+            )
+        }};
+    }
+
+    /// Creates a boxed vector deserialized with the given function.
+    #[macro_export]
+    macro_rules! do_deserialize_column {
+        ($value_type: ty, $num_rows: expr, $row_len: expr, $column_start: expr, $column_len: expr, $repeats: expr, $data: expr, $deserialize_fn: tt) => {{
+            let mut result = Vec::with_capacity($num_rows * $repeats);
+            for i in 0..$num_rows {
+                let start = $row_len * i + $column_start;
+                let column = $data[start..start + $column_len].to_vec();
+                let value_size = std::mem::size_of::<$value_type>();
+                for repeat in 0..$repeats {
+                    let value_start = repeat * value_size;
+                    let raw_value = column[value_start..value_start + value_size]
+                        .try_into()
+                        .unwrap();
+                    result.push($deserialize_fn(raw_value));
+                }
+            }
+
+            $crate::return_box!(result)
+        }};
+    }
+
+    /// Gets the default deserialization function for a type (assumes from_be_bytes).
+    #[macro_export]
+    macro_rules! default_deserialize_fn {
+        ($value_type: ty) => {
+            <$value_type>::from_be_bytes
+        };
     }
 }
 
