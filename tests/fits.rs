@@ -64,3 +64,18 @@ fn test_hdu_table_column() -> Result<(), Box<dyn Error>> {
 
     Ok(())
 }
+
+#[test]
+fn test_hdu_image() -> Result<(), Box<dyn Error>> {
+    let fits_file = File::open("assets/eagle_nebula/502nmos.fits")?;
+    let fits_file_reader = BufReader::new(fits_file);
+    let mut hdu_list = HduList::new(fits_file_reader);
+    let primary_hdu = hdu_list.first_mut().unwrap();
+
+    let dimensions = primary_hdu.get_dimensions();
+    assert_eq!(dimensions, vec![1600, 1600]);
+
+    let data = primary_hdu.get_data::<f32>();
+
+    Ok(())
+}
