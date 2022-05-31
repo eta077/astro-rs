@@ -417,7 +417,7 @@ impl Hdu {
             .unwrap_or_default()
     }
 
-    /// Creates a Vec containing the dimensions of the data section of the HDU as defined by the NAXIS keyword.
+    /// Creates a Vec containing the dimensions of the data section of the HDU as defined by the NAXIS keywords.
     pub fn get_dimensions(&mut self) -> Vec<usize> {
         let naxis = *self
             .header
