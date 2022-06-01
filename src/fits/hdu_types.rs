@@ -210,7 +210,7 @@ pub mod binary_table_hdu {
             }
         }
         if let Some(tform) = tform {
-            return Some(*tform.get_values(hdu.get_data(), column_start, row_len, num_rows));
+            return Some(*tform.create_column(hdu.data_raw(), column_start, row_len, num_rows));
         }
         None
     }
@@ -254,7 +254,7 @@ pub mod binary_table_hdu {
             }
         }
         if let Some(tform) = tform {
-            return Some(*tform.get_values(hdu.get_data(), column_start, row_len, num_rows));
+            return Some(*tform.create_column(hdu.data_raw(), column_start, row_len, num_rows));
         }
         None
     }
