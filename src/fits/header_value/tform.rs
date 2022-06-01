@@ -75,8 +75,8 @@ impl TForm {
         self.r * type_bytes
     }
 
-    /// Gets the function to transform raw bytes to the given type.
-    pub fn get_values<T>(
+    /// Creates a column of values from the given data.
+    pub fn create_column<T>(
         &self,
         data: &[u8],
         column_start: usize,
@@ -177,17 +177,6 @@ impl TForm {
 }
 
 mod tform_macros {
-    /// Creates a box of the given value and casts it to an implicit return type.
-    #[macro_export]
-    macro_rules! return_box {
-        ($result: expr) => {{
-            let b = Box::new($result);
-            let ptr = Box::into_raw(b);
-            let new_ptr = ptr.cast();
-            Box::from_raw(new_ptr)
-        }};
-    }
-
     /// Creates a boxed vector deserialized with the given function, or a default function if one is not given.
     #[macro_export]
     macro_rules! deserialize_column {
