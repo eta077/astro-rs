@@ -76,6 +76,16 @@ fn test_hdu_image() -> Result<(), Box<dyn Error>> {
     assert_eq!(dimensions, vec![1600, 1600]);
 
     let data = primary_hdu.get_data::<f32>();
-
+    let mut data_min = 0.0;
+    let mut data_max = 0.0;
+    for value in &data {
+        if *value > data_max {
+            data_max = *value;
+        } else if *value < data_min {
+            data_min = *value;
+        }
+    }
+    assert_eq!(data_max, 2925.8718);
+    assert_eq!(data_min, -12.439324);
     Ok(())
 }
