@@ -5,6 +5,11 @@ pub use primary_hdu::*;
 
 use super::*;
 
+/// The header keyword indicating the name of a table column.
+pub const TTYPE_KEYWORD: [u8; 8] = *b"TTYPE   ";
+/// The header keyword indicating the size in bytes of a table column.
+pub const TFORM_KEYWORD: [u8; 8] = *b"TFORM   ";
+
 pub(crate) const DEFAULT_BITPIX_BYTES: [u8; 80] =
     *b"BITPIX  =                    8                                                  ";
 pub(crate) const DEFAULT_NAXIS_BYTES: [u8; 80] =
@@ -117,13 +122,10 @@ pub mod image_hdu {
     }
 }
 
-/// Functions related to an Image type HDU.
+/// Functions related to a Binary Table type HDU.
 pub mod binary_table_hdu {
     use super::*;
     use crate::fits::header_value::TForm;
-
-    const TTYPE_BYTES: [u8; 8] = *b"TTYPE   ";
-    const TFORM_BYTES: [u8; 8] = *b"TFORM   ";
 
     /// Constructs an HDU pre-populated with the required cards to be a Binary Table HDU.
     pub fn default() -> Hdu {
@@ -182,40 +184,24 @@ pub mod binary_table_hdu {
             .get_card(naxis_keyword)
             .and_then(|card| card.get_value::<u32>().ok())
             .unwrap_or_default() as usize;
-        while n <= num_rows {
-            let mut keyword = TFORM_BYTES;
-            let mut i = 5;
-            if n > 99 {
-                keyword[i] = (n / 100 + 48) as u8;
-                i += 1;
-            }
-            if n > 9 {
-                keyword[i] = (n % 100 / 10 + 48) as u8;
-                i += 1;
-            }
-            keyword[i] = (n % 10 + 48) as u8;
-            if let Some(card) = hdu.header.get_card(keyword) {
+        let mut tform_keyword = FitsHeaderKeyword::from(TFORM_KEYWORD);
+        let mut ttype_keyword = FitsHeaderKeyword::from(TTYPE_KEYWORD);
+        while n as usize <= num_rows {
+            tform_keyword.append_number(n);
+            if let Some(card) = hdu.header.get_card(tform_keyword) {
                 if let Ok(tform_value) = card.get_value::<TForm>() {
-                    let mut keyword = TTYPE_BYTES;
-                    let mut i = 5;
-                    if n > 99 {
-                        keyword[i] = (n / 100 + 48) as u8;
-                        i += 1;
-                    }
-                    if n > 9 {
-                        keyword[i] = (n % 100 / 10 + 48) as u8;
-                        i += 1;
-                    }
-                    keyword[i] = (n % 10 + 48) as u8;
-                    if let Some(card) = hdu.header.get_card(keyword) {
-                        if let Ok(value) = card.get_value::<String>() {
-                            // TODO: ignore case
-                            if value.as_str() == name {
-                                tform = Some(tform_value);
-                                break;
-                            }
+                    ttype_keyword.append_number(n);
+                    if let Some(value) = hdu
+                        .header
+                        .get_card(ttype_keyword)
+                        .and_then(|card| card.get_value::<String>().ok())
+                    {
+                        if value.eq_ignore_ascii_case(name) {
+                            tform = Some(tform_value);
+                            break;
                         }
                     }
+
                     column_start += tform_value.value();
                 }
                 n += 1;
@@ -224,8 +210,7 @@ pub mod binary_table_hdu {
             }
         }
         if let Some(tform) = tform {
-            let data = hdu.get_data::<Vec<u8>>().ok()?;
-            return Some(*tform.get_values(&data, column_start, row_len, num_rows));
+            return Some(*tform.create_column(hdu.data_raw(), column_start, row_len, num_rows));
         }
         None
     }
@@ -243,7 +228,7 @@ pub mod binary_table_hdu {
             .get_card(naxis_keyword)
             .and_then(|card| card.get_value::<u32>().ok())
             .unwrap_or_default() as usize;
-        if index > num_rows as u16 {
+        if index as usize > num_rows {
             return None;
         }
         naxis_keyword[5] = b'1';
@@ -252,19 +237,10 @@ pub mod binary_table_hdu {
             .get_card(naxis_keyword)
             .and_then(|card| card.get_value::<u32>().ok())
             .unwrap_or_default() as usize;
+        let mut tform_keyword = FitsHeaderKeyword::from(TFORM_KEYWORD);
         while n <= index {
-            let mut keyword = TFORM_BYTES;
-            let mut i = 5;
-            if n > 99 {
-                keyword[i] = (n / 100 + 48) as u8;
-                i += 1;
-            }
-            if n > 9 {
-                keyword[i] = (n % 100 / 10 + 48) as u8;
-                i += 1;
-            }
-            keyword[i] = (n % 10 + 48) as u8;
-            if let Some(card) = hdu.header.get_card(keyword) {
+            tform_keyword.append_number(n);
+            if let Some(card) = hdu.header.get_card(tform_keyword) {
                 if let Ok(value) = card.get_value::<TForm>() {
                     if n == index {
                         tform = Some(value);
@@ -278,8 +254,7 @@ pub mod binary_table_hdu {
             }
         }
         if let Some(tform) = tform {
-            let data = hdu.get_data::<Vec<u8>>().ok()?;
-            return Some(*tform.get_values(&data, column_start, row_len, num_rows));
+            return Some(*tform.create_column(hdu.data_raw(), column_start, row_len, num_rows));
         }
         None
     }
