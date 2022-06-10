@@ -66,7 +66,8 @@ impl FitsHeader {
         let mut cards = Vec::with_capacity(num_cards);
         while raw.len() >= HEADER_CARD_LEN {
             let card_vec = raw.drain(0..HEADER_CARD_LEN).collect::<Vec<u8>>();
-            let card_slice: [u8; 80] = card_vec[0..80].try_into().unwrap();
+            let card_slice: [u8; HEADER_CARD_LEN] =
+                card_vec[0..HEADER_CARD_LEN].try_into().unwrap();
             cards.push(FitsHeaderCard::from(card_slice));
         }
 
@@ -75,25 +76,113 @@ impl FitsHeader {
 
     /// Serializes the header into bytes.
     pub fn to_bytes(self) -> Vec<u8> {
-        let mut result = Vec::new();
+        let mut result = Vec::with_capacity(FITS_RECORD_LEN);
+        let filled_cards = self.cards.len();
         for card in self.cards {
-            let card_raw: [u8; 80] = card.into();
+            let card_raw: [u8; HEADER_CARD_LEN] = card.into();
             result.extend_from_slice(&card_raw);
+        }
+        if filled_cards < 36 {
+            result.resize_with(FITS_RECORD_LEN, || b' ');
         }
         result
     }
 
     /// Searches the header cards for a match with the given keyword.
-    pub fn get_card<K>(&mut self, keyword: K) -> Option<&mut FitsHeaderCard>
-    where
-        FitsHeaderKeyword: PartialEq<K>,
-    {
+    pub fn get_card<K: PartialEq<FitsHeaderKeyword>>(
+        &mut self,
+        keyword: K,
+    ) -> Option<&mut FitsHeaderCard> {
         for card in self.cards.iter_mut() {
-            if card.keyword == keyword {
+            if keyword == card.keyword {
                 return Some(card);
             }
         }
         None
+    }
+
+    /// Sets the value and comment of the card with the given keyword.
+    /// If a card already exists, the data is overwritten.
+    /// If a card does not exist, one is created.
+    pub fn set_card<
+        K: PartialEq<FitsHeaderKeyword> + Into<FitsHeaderKeyword>,
+        T: FitsHeaderValue + 'static,
+    >(
+        &mut self,
+        keyword: K,
+        value: T,
+        comment: Option<String>,
+    ) -> Result<(), FitsHeaderError> {
+        let fits_keyword = keyword.into();
+        let new_card = FitsHeaderCard {
+            keyword: fits_keyword,
+            value: FitsHeaderValueContainer::new(value, comment)?,
+        };
+        if let Some(card) = self.get_card(fits_keyword) {
+            *card = new_card;
+        } else {
+            let index = if self
+                .cards
+                .last()
+                .map(|card| card.keyword == END_KEYWORD)
+                .unwrap_or_default()
+            {
+                self.cards.len() - 1
+            } else {
+                self.cards.len()
+            };
+            self.cards.insert(index, new_card);
+        }
+        Ok(())
+    }
+
+    /// Sets the value of the card with the given keyword.
+    /// If a card already exists, the value is overwritten, and the comment is retained.
+    /// If a card does not exist, one is created.
+    pub fn set_value<K, T: FitsHeaderValue + 'static>(
+        &mut self,
+        keyword: K,
+        value: T,
+    ) -> Result<(), FitsHeaderError>
+    where
+        K: PartialEq<FitsHeaderKeyword> + Into<FitsHeaderKeyword>,
+    {
+        let fits_keyword = keyword.into();
+        if let Some(card) = self.get_card(fits_keyword) {
+            card.value.set_value(value)?;
+        } else {
+            let new_card = FitsHeaderCard {
+                keyword: fits_keyword,
+                value: FitsHeaderValueContainer::new(value, None)?,
+            };
+            let index = if self
+                .cards
+                .last()
+                .map(|card| card.keyword == END_KEYWORD)
+                .unwrap_or_default()
+            {
+                self.cards.len() - 1
+            } else {
+                self.cards.len()
+            };
+            self.cards.insert(index, new_card);
+        }
+        Ok(())
+    }
+
+    /// Sets the comment of the card with the given keyword.
+    /// If a card already exists, the comment is overwritten, and the value is retained.
+    /// If a card does not exist, this function has no effect.
+    pub fn set_comment<K: PartialEq<FitsHeaderKeyword> + Into<FitsHeaderKeyword>>(
+        &mut self,
+        keyword: K,
+        comment: Option<String>,
+    ) -> Result<(), FitsHeaderError> {
+        let fits_keyword = keyword.into();
+        if let Some(card) = self.get_card(fits_keyword) {
+            card.value.set_comment(comment)?;
+        }
+        Ok(())
     }
 }
 
@@ -150,9 +239,9 @@ impl FitsHeaderCard {
 
 impl From<[u8; 80]> for FitsHeaderCard {
     fn from(raw: [u8; 80]) -> Self {
-        let keyword_bytes: [u8; 8] = raw[0..8].try_into().unwrap();
+        let keyword_bytes: [u8; 8] = raw[0..HEADER_KEYWORD_LEN].try_into().unwrap();
         let keyword = FitsHeaderKeyword::from(keyword_bytes);
-        let value_bytes: [u8; 72] = raw[8..80].try_into().unwrap();
+        let value_bytes: [u8; 72] = raw[HEADER_KEYWORD_LEN..HEADER_CARD_LEN].try_into().unwrap();
         let value = FitsHeaderValueContainer::from(value_bytes);
         FitsHeaderCard { keyword, value }
     }
@@ -160,11 +249,11 @@ impl From<[u8; 80]> for FitsHeaderCard {
 
 impl From<FitsHeaderCard> for [u8; 80] {
     fn from(card: FitsHeaderCard) -> Self {
-        let mut result = [0; 80];
-        let keyword_raw: [u8; 8] = card.keyword.into();
-        result[0..8].copy_from_slice(&keyword_raw);
+        let mut result = [0; HEADER_CARD_LEN];
+        let keyword_raw: [u8; HEADER_KEYWORD_LEN] = card.keyword.into();
+        result[0..HEADER_KEYWORD_LEN].copy_from_slice(&keyword_raw);
         let value_raw: [u8; 72] = card.value.into();
-        result[8..80].copy_from_slice(&value_raw);
+        result[HEADER_KEYWORD_LEN..HEADER_CARD_LEN].copy_from_slice(&value_raw);
 
         result
     }
@@ -283,6 +372,12 @@ impl PartialEq<[u8; 8]> for FitsHeaderKeyword {
     }
 }
 
+impl PartialEq<FitsHeaderKeyword> for [u8; 8] {
+    fn eq(&self, other: &FitsHeaderKeyword) -> bool {
+        *self == other.raw
+    }
+}
+
 /// A representation of the combined header card value and comment.
 /// This wrapper ensures that the total number of bytes between the value and comment will not exceed 72.
 #[derive(Debug, Clone)]
@@ -293,6 +388,19 @@ pub struct FitsHeaderValueContainer {
 }
 
 impl FitsHeaderValueContainer {
+    /// Constructs a new FitsHeaderValueContainer with the given value and comment.
+    pub fn new<T: FitsHeaderValue + 'static>(
+        value: T,
+        comment: Option<String>,
+    ) -> Result<Self, FitsHeaderError> {
+        Self::check_comment_length(value.to_bytes(), comment.as_ref())?;
+        Ok(FitsHeaderValueContainer {
+            raw: Vec::new(),
+            value: Some(Rc::new(value)),
+            comment: comment.map(Rc::new),
+        })
+    }
+
     /// Gets the value of the header card.
     /// If the value has not yet been deserialized, the deserialization process is attempted.
     /// If the process succeeds, the deserialized value is cached.
@@ -324,6 +432,14 @@ impl FitsHeaderValueContainer {
         }
     }
 
+    /// Sets the value of the header card.
+    pub fn set_value<T: FitsHeaderValue + 'static>(
+        &mut self,
+        value: T,
+    ) -> Result<(), FitsHeaderError> {
+        Ok(())
+    }
+
     /// Gets the comment section of the header card.
     ///
     /// ```
@@ -336,7 +452,12 @@ impl FitsHeaderValueContainer {
     pub fn get_comment(&mut self) -> Result<Rc<String>, FitsHeaderError> {
         if let Some(data) = &self.comment {
             Ok(Rc::clone(data))
-        } else if let Some(comment_start_index) = self.raw.iter().position(|b| *b == b'/') {
+        } else if let Some(comment_start_index) = self
+            .raw
+            .iter()
+            .position(|b| *b == b'/')
+            .or_else(|| self.raw.iter().rposition(|b| *b != b' ').map(|idx| idx + 1))
+        {
             let mut value_bytes: Vec<u8> = self.raw.drain(comment_start_index..).collect();
             // discard '/' prefix
             value_bytes.remove(0);
@@ -354,6 +475,66 @@ impl FitsHeaderValueContainer {
         } else {
             Ok(Default::default())
         }
+    }
+
+    /// Sets the comment section of the header card.
+    pub fn set_comment(&mut self, comment: Option<String>) -> Result<(), FitsHeaderError> {
+        let value_raw = match (self.value.as_ref(), self.comment.as_ref()) {
+            (Some(value), Some(_comment)) => value.to_bytes(),
+            (Some(value), None) => {
+                self.raw.clear();
+                value.to_bytes()
+            }
+            (None, Some(_comment)) => {
+                let mut value_raw = [b' '; 70];
+                let idx_diff = if self.raw.len() > 70 {
+                    self.raw.len() - 70
+                } else {
+                    0
+                };
+                for i in idx_diff..self.raw.len() {
+                    value_raw[i - idx_diff] = self.raw[i];
+                }
+                value_raw
+            }
+            (None, None) => {
+                self.get_comment()?;
+                let mut value_raw = [b' '; 70];
+                let idx_diff = if self.raw.len() > 70 {
+                    self.raw.len() - 70
+                } else {
+                    0
+                };
+                for i in idx_diff..self.raw.len() {
+                    value_raw[i - idx_diff] = self.raw[i];
+                }
+                value_raw
+            }
+        };
+        Self::check_comment_length(value_raw, comment.as_ref())?;
+        self.comment = comment.map(Rc::new);
+        Ok(())
+    }
+
+    fn check_comment_length(
+        value_raw: [u8; 70],
+        comment: Option<&String>,
+    ) -> Result<(), FitsHeaderError> {
+        if let Some(comment_str) = comment {
+            let comment_start = value_raw
+                .iter()
+                .rposition(|b| *b != b' ')
+                .unwrap_or_default();
+            let diff = 68_usize.checked_sub(comment_start).unwrap_or_default(); // minus an additional 2 for the delimiter
+            if diff < comment_str.len() {
+                return Err(FitsHeaderError::InvalidLength {
+                    expected: diff,
+                    found: comment_str.len(),
+                    intent: String::from("header card comment"),
+                });
+            }
+        }
+        Ok(())
     }
 
     fn trim_value(value: Vec<u8>) -> Vec<u8> {
@@ -413,7 +594,7 @@ impl From<FitsHeaderValueContainer> for [u8; 72] {
                 let value_raw = container.raw.as_slice();
                 let mut comment_start = value_raw.len();
                 result[0..comment_start].copy_from_slice(value_raw);
-
+                comment_start += 1;
                 result[comment_start] = b'/';
                 comment_start += 2;
                 let comment_raw = comment.as_bytes();

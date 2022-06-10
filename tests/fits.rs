@@ -76,7 +76,7 @@ mod fits_tests {
         let dimensions = primary_hdu.get_dimensions();
         assert_eq!(dimensions, vec![1600, 1600]);
 
-        let data = primary_hdu.get_data::<f32>();
+        let data = primary_hdu.get_data::<Vec<f32>>()?;
         let mut data_min = 0.0;
         let mut data_max = 0.0;
         for value in &data {
@@ -88,6 +88,54 @@ mod fits_tests {
         }
         assert_eq!(data_max, 2925.8718);
         assert_eq!(data_min, -12.439324);
+        Ok(())
+    }
+
+    #[test]
+    fn test_image_to_hdu() -> Result<(), Box<dyn Error>> {
+        use image::GenericImageView;
+
+        let img = image::open("assets/eagle_nebula/eagle_composite.jpg")?;
+        let (dim_x, dim_y) = img.dimensions();
+        let size = (dim_x * dim_y) as usize;
+        let mut r = Vec::with_capacity(size);
+        let mut g = Vec::with_capacity(size);
+        let mut b = Vec::with_capacity(size);
+        for (_x, _y, rgb) in img.pixels() {
+            r.push(rgb.0[0] as i32);
+            g.push(rgb.0[1] as i32);
+            b.push(rgb.0[2] as i32);
+        }
+
+        let mut r_fits = HduList::default();
+        let mut r_hdu = primary_hdu::default();
+        r_hdu.header.set_card(
+            BITPIX_KEYWORD,
+            Bitpix::I32,
+            Some(String::from("array data type")),
+        )?;
+        let mut naxis_keyword = FitsHeaderKeyword::from(NAXIS_KEYWORD);
+        r_hdu.header.set_card(
+            naxis_keyword,
+            2u16,
+            Some(String::from("number of array dimensions")),
+        )?;
+        naxis_keyword.append_number(1);
+        r_hdu.header.set_card(naxis_keyword, dim_x, None)?;
+        naxis_keyword.append_number(2);
+        r_hdu.header.set_card(naxis_keyword, dim_y, None)?;
+
+        r_hdu.header.set_comment(
+            SIMPLE_KEYWORD,
+            Some(String::from("conforms to FITS standard")),
+        )?;
+        r_hdu.header.set_card(*b"EXTEND  ", true, None)?;
+
+        r_hdu.set_data(&r);
+        r_fits.push(r_hdu);
+        let file = File::create("red.fits")?;
+        r_fits.write(&mut BufWriter::new(file))?;
+
         Ok(())
     }
 }
