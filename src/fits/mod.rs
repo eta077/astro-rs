@@ -55,7 +55,7 @@ impl<R: Read> HduList<R> {
     /// ```
     pub fn get_by_index(&mut self, index: usize) -> Option<&mut Hdu> {
         let mut cur_hdus = self.hdus.len();
-        while cur_hdus < index + 1 {
+        while cur_hdus <= index {
             let new_hdu = self.read_hdu()?;
             self.hdus.push(new_hdu);
             cur_hdus += 1;
