@@ -59,15 +59,14 @@ impl FitsHeader {
     }
 
     /// Constructs a FitsHeader from the given bytes.
-    pub fn from_bytes(mut raw: Vec<u8>) -> FitsHeader {
+    pub fn from_bytes(raw: Vec<u8>) -> FitsHeader {
         let raw_len = raw.len();
         let num_cards = raw_len / HEADER_CARD_LEN;
 
         let mut cards = Vec::with_capacity(num_cards);
-        while raw.len() >= HEADER_CARD_LEN {
-            let card_vec = raw.drain(0..HEADER_CARD_LEN).collect::<Vec<u8>>();
-            let card_slice: [u8; HEADER_CARD_LEN] =
-                card_vec[0..HEADER_CARD_LEN].try_into().unwrap();
+        for i in 0..num_cards {
+            let index = i * HEADER_CARD_LEN;
+            let card_slice: [u8; 80] = raw[index..index + HEADER_CARD_LEN].try_into().unwrap();
             cards.push(FitsHeaderCard::from(card_slice));
         }
 

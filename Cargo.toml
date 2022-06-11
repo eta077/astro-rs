@@ -34,3 +34,6 @@ coordinates = ["dep:chrono", "dep:hyper", "dep:measurements", "dep:urlencoding"]
 [[bench]]
 name = "fits_benchmark"
 harness = false
+
+[profile.bench]
+debug = true
