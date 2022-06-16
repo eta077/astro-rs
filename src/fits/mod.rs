@@ -349,6 +349,12 @@ impl Hdu {
     pub fn to_bytes(mut self) -> Vec<u8> {
         let mut result = self.header.to_bytes();
         result.append(&mut self.data_raw);
+        let remainder = result.len() % FITS_RECORD_LEN;
+        if remainder != 0 {
+            let num_cards = (result.len() / FITS_RECORD_LEN) + 1;
+            let new_len = num_cards * FITS_RECORD_LEN;
+            result.resize(new_len, 0);
+        }
         result
     }
 

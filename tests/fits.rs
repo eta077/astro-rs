@@ -4,6 +4,7 @@ mod fits_tests {
     use std::io::{BufReader, BufWriter, Cursor, Read};
 
     use astro_rs::fits::*;
+    use image::{Rgb, RgbImage};
 
     #[test]
     fn test_hdu_list_from_bytes() -> Result<(), Box<dyn Error>> {
@@ -93,48 +94,128 @@ mod fits_tests {
 
     #[test]
     fn test_image_to_hdu() -> Result<(), Box<dyn Error>> {
-        use image::GenericImageView;
-
-        let img = image::open("assets/eagle_nebula/eagle_composite.jpg")?;
+        let img = image::open("assets/eagle_nebula/eagle_composite.jpg")?.into_rgb8();
         let (dim_x, dim_y) = img.dimensions();
         let size = (dim_x * dim_y) as usize;
         let mut r = Vec::with_capacity(size);
         let mut g = Vec::with_capacity(size);
         let mut b = Vec::with_capacity(size);
-        for (_x, _y, rgb) in img.pixels() {
+        for rgb in img.pixels() {
             r.push(rgb.0[0] as i32);
             g.push(rgb.0[1] as i32);
             b.push(rgb.0[2] as i32);
         }
 
-        let mut r_fits = HduList::default();
-        let mut r_hdu = primary_hdu::default();
-        r_hdu.header.set_card(
-            BITPIX_KEYWORD,
-            Bitpix::I32,
-            Some(String::from("array data type")),
-        )?;
-        let mut naxis_keyword = FitsHeaderKeyword::from(NAXIS_KEYWORD);
-        r_hdu.header.set_card(
-            naxis_keyword,
-            2u16,
-            Some(String::from("number of array dimensions")),
-        )?;
-        naxis_keyword.append_number(1);
-        r_hdu.header.set_card(naxis_keyword, dim_x, None)?;
-        naxis_keyword.append_number(2);
-        r_hdu.header.set_card(naxis_keyword, dim_y, None)?;
+        let mut r_writer = BufWriter::new(Cursor::new(Vec::new()));
+        let mut g_writer = BufWriter::new(Cursor::new(Vec::new()));
+        let mut b_writer = BufWriter::new(Cursor::new(Vec::new()));
+        {
+            let mut r_fits = HduList::default();
+            let mut r_hdu = primary_hdu::default();
+            r_hdu.header.set_card(
+                BITPIX_KEYWORD,
+                Bitpix::I32,
+                Some(String::from("array data type")),
+            )?;
+            let mut naxis_keyword = FitsHeaderKeyword::from(NAXIS_KEYWORD);
+            r_hdu.header.set_card(
+                naxis_keyword,
+                2u16,
+                Some(String::from("number of array dimensions")),
+            )?;
+            naxis_keyword.append_number(1);
+            r_hdu.header.set_card(naxis_keyword, dim_x, None)?;
+            naxis_keyword.append_number(2);
+            r_hdu.header.set_card(naxis_keyword, dim_y, None)?;
+            r_hdu.header.set_comment(
+                SIMPLE_KEYWORD,
+                Some(String::from("conforms to FITS standard")),
+            )?;
+            r_hdu.header.set_card(*b"EXTEND  ", true, None)?;
 
-        r_hdu.header.set_comment(
-            SIMPLE_KEYWORD,
-            Some(String::from("conforms to FITS standard")),
-        )?;
-        r_hdu.header.set_card(*b"EXTEND  ", true, None)?;
+            r_hdu.set_data(&r);
+            r_fits.push(r_hdu);
+            r_fits.write(&mut r_writer)?;
+        }
 
-        r_hdu.set_data(&r);
-        r_fits.push(r_hdu);
-        let file = File::create("red.fits")?;
-        r_fits.write(&mut BufWriter::new(file))?;
+        {
+            let mut g_fits = HduList::default();
+            let mut g_hdu = primary_hdu::default();
+            g_hdu.header.set_card(
+                BITPIX_KEYWORD,
+                Bitpix::I32,
+                Some(String::from("array data type")),
+            )?;
+            let mut naxis_keyword = FitsHeaderKeyword::from(NAXIS_KEYWORD);
+            g_hdu.header.set_card(
+                naxis_keyword,
+                2u16,
+                Some(String::from("number of array dimensions")),
+            )?;
+            naxis_keyword.append_number(1);
+            g_hdu.header.set_card(naxis_keyword, dim_x, None)?;
+            naxis_keyword.append_number(2);
+            g_hdu.header.set_card(naxis_keyword, dim_y, None)?;
+            g_hdu.header.set_comment(
+                SIMPLE_KEYWORD,
+                Some(String::from("conforms to FITS standard")),
+            )?;
+            g_hdu.header.set_card(*b"EXTEND  ", true, None)?;
+
+            g_hdu.set_data(&g);
+            g_fits.push(g_hdu);
+            g_fits.write(&mut g_writer)?;
+        }
+
+        {
+            let mut b_fits = HduList::default();
+            let mut b_hdu = primary_hdu::default();
+            b_hdu.header.set_card(
+                BITPIX_KEYWORD,
+                Bitpix::I32,
+                Some(String::from("array data type")),
+            )?;
+            let mut naxis_keyword = FitsHeaderKeyword::from(NAXIS_KEYWORD);
+            b_hdu.header.set_card(
+                naxis_keyword,
+                2u16,
+                Some(String::from("number of array dimensions")),
+            )?;
+            naxis_keyword.append_number(1);
+            b_hdu.header.set_card(naxis_keyword, dim_x, None)?;
+            naxis_keyword.append_number(2);
+            b_hdu.header.set_card(naxis_keyword, dim_y, None)?;
+            b_hdu.header.set_comment(
+                SIMPLE_KEYWORD,
+                Some(String::from("conforms to FITS standard")),
+            )?;
+            b_hdu.header.set_card(*b"EXTEND  ", true, None)?;
+
+            b_hdu.set_data(&b);
+            b_fits.push(b_hdu);
+            b_fits.write(&mut b_writer)?;
+        }
+
+        let mut r_fits = HduList::new(BufReader::new(Cursor::new(r_writer.get_ref().get_ref().to_owned())));
+        let r_data = r_fits.first_mut().unwrap().get_data::<Vec<i32>>().unwrap();
+        let mut g_fits = HduList::new(BufReader::new(Cursor::new(g_writer.get_ref().get_ref().to_owned())));
+        let g_data = g_fits.first_mut().unwrap().get_data::<Vec<i32>>().unwrap();
+        let mut b_fits = HduList::new(BufReader::new(Cursor::new(b_writer.get_ref().get_ref().to_owned())));
+        let b_data = b_fits.first_mut().unwrap().get_data::<Vec<i32>>().unwrap();
+        let mut new_img = RgbImage::new(dim_x, dim_y);
+        for i in 0..size {
+            let x = i as u32 % dim_x;
+            let y = i as u32 / dim_x;
+            new_img.put_pixel(
+                x,
+                y,
+                Rgb([r_data[i] as u8, g_data[i] as u8, b_data[i] as u8]),
+            );
+        }
+
+        for (orig, new) in img.pixels().zip(new_img.pixels()) {
+            assert_eq!(orig, new);
+        }
 
         Ok(())
     }

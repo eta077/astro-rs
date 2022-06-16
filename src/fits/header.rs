@@ -436,6 +436,21 @@ impl FitsHeaderValueContainer {
         &mut self,
         value: T,
     ) -> Result<(), FitsHeaderError> {
+        let comment = match (self.value.as_ref(), self.comment.as_ref()) {
+            (None, None) => {
+                let comment = self.get_comment()?.to_string();
+                self.raw.clear();
+                comment
+            }
+            (None, Some(comment)) => {
+                self.raw.clear();
+                comment.to_string()
+            }
+            (Some(_), None) => self.get_comment()?.to_string(),
+            (Some(_), Some(comment)) => comment.to_string(),
+        };
+        Self::check_comment_length(value.to_bytes(), Some(&comment))?;
+        self.value = Some(Rc::new(value));
         Ok(())
     }
 
