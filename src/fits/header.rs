@@ -509,18 +509,16 @@ impl FitsHeaderValueContainer {
                 Ok(Rc::from_raw(new_ptr))
             }
         } else {
-            let value_start_index = self.raw.iter().position(|b| *b == b'=').unwrap_or(0);
             let comment_start_index = self
                 .raw
                 .iter()
                 .position(|b| *b == b'/')
                 .unwrap_or(self.raw.len());
-            let mut value_bytes: Vec<u8> = self
-                .raw
-                .drain(value_start_index..comment_start_index)
-                .collect();
+            let mut value_bytes: Vec<u8> = self.raw.drain(0..comment_start_index).collect();
             // discard '=' prefix
-            value_bytes.remove(0);
+            if value_bytes.first() == Some(&b'=') {
+                value_bytes.remove(0);
+            }
 
             let data = Rc::new(T::from_bytes(Self::trim_value(value_bytes))?);
             let ret = Rc::clone(&data);
@@ -599,27 +597,23 @@ impl FitsHeaderValueContainer {
             }
             (None, Some(_comment)) => {
                 let mut value_raw = [b' '; 70];
-                let value_start_index = self
-                    .raw
-                    .iter()
-                    .position(|b| *b == b'=')
-                    .map(|position| position + 1)
-                    .unwrap_or(0);
-                value_raw[0..(self.raw.len() - value_start_index)]
-                    .copy_from_slice(&self.raw[value_start_index..]);
+                let idx_diff = if self.raw.len() > 70 {
+                    self.raw.len() - 70
+                } else {
+                    0
+                };
+                value_raw[0..(self.raw.len() - idx_diff)].copy_from_slice(&self.raw[idx_diff..]);
                 value_raw
             }
             (None, None) => {
                 self.get_comment()?;
                 let mut value_raw = [b' '; 70];
-                let value_start_index = self
-                    .raw
-                    .iter()
-                    .position(|b| *b == b'=')
-                    .map(|position| position + 1)
-                    .unwrap_or(0);
-                value_raw[0..(self.raw.len() - value_start_index)]
-                    .copy_from_slice(&self.raw[value_start_index..]);
+                let idx_diff = if self.raw.len() > 70 {
+                    self.raw.len() - 70
+                } else {
+                    0
+                };
+                value_raw[0..(self.raw.len() - idx_diff)].copy_from_slice(&self.raw[idx_diff..]);
                 value_raw
             }
         };
