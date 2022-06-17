@@ -59,6 +59,33 @@ impl FitsHeader {
     }
 
     /// Constructs a FitsHeader from the given bytes.
+    ///
+    /// ```
+    /// use astro_rs::fits::*;
+    /// use std::rc::Rc;
+    ///
+    /// // default primary HDU header bytes
+    /// let bytes = *b"SIMPLE  =                    T                                                  BITPIX  =                    8                                                  NAXIS   =                    0                                                  END                                                                             ";
+    /// let mut header = FitsHeader::from_bytes(bytes.to_vec());
+    ///
+    /// assert!(*header
+    ///     .get_card(SIMPLE_KEYWORD)
+    ///     .and_then(|card| card.get_value::<bool>().ok())
+    ///     .unwrap_or_default());
+    /// assert_eq!(
+    ///     header
+    ///         .get_card(BITPIX_KEYWORD)
+    ///         .and_then(|card| card.get_value::<Bitpix>().ok()),
+    ///     Some(Rc::new(Bitpix::U8))
+    /// );
+    /// assert_eq!(
+    ///     header
+    ///         .get_card(NAXIS_KEYWORD)
+    ///         .and_then(|card| card.get_value::<u16>().ok()),
+    ///     Some(Rc::new(0))
+    /// );
+    /// assert!(header.get_card(END_KEYWORD).is_some());
+    /// ```
     pub fn from_bytes(raw: Vec<u8>) -> FitsHeader {
         let raw_len = raw.len();
         let num_cards = raw_len / HEADER_CARD_LEN;
@@ -74,6 +101,16 @@ impl FitsHeader {
     }
 
     /// Serializes the header into bytes.
+    ///
+    /// ```
+    /// use astro_rs::fits::*;
+    ///
+    /// let hdu = primary_hdu::default();
+    /// let mut bytes = b"SIMPLE  =                    T                                                  BITPIX  =                    8                                                  NAXIS   =                    0                                                  END                                                                             ".to_vec();
+    /// bytes.resize(2880, b' ');
+    ///
+    /// assert_eq!(hdu.header.to_bytes(), bytes);
+    /// ```
     pub fn to_bytes(self) -> Vec<u8> {
         let mut result = Vec::with_capacity(FITS_RECORD_LEN);
         let filled_cards = self.cards.len();
@@ -82,12 +119,19 @@ impl FitsHeader {
             result.extend_from_slice(&card_raw);
         }
         if filled_cards < 36 {
-            result.resize_with(FITS_RECORD_LEN, || b' ');
+            result.resize(FITS_RECORD_LEN, b' ');
         }
         result
     }
 
     /// Searches the header cards for a match with the given keyword.
+    /// 
+    /// ```
+    /// use astro_rs::fits::*;
+    /// 
+    /// let mut hdu = primary_hdu::default();
+    /// assert!(hdu.header.get_card(SIMPLE_KEYWORD).is_some());
+    /// ```
     pub fn get_card<K: PartialEq<FitsHeaderKeyword>>(
         &mut self,
         keyword: K,
@@ -103,6 +147,24 @@ impl FitsHeader {
     /// Sets the value and comment of the card with the given keyword.
     /// If a card already exists, the data is overwritten.
     /// If a card does not exist, one is created.
+    /// 
+    /// ```
+    /// use astro_rs::fits::*;
+    /// use std::rc::Rc;
+    /// 
+    /// let mut header = FitsHeader::new();
+    /// header.set_card(SIMPLE_KEYWORD, true, None);
+    /// assert!(*header
+    ///     .get_card(SIMPLE_KEYWORD)
+    ///     .and_then(|card| card.get_value::<bool>().ok())
+    ///     .unwrap_or_default());
+    /// 
+    /// header.set_card(SIMPLE_KEYWORD, false, Some(String::from("FITS STANDARD")));
+    /// let mut card = header.get_card(SIMPLE_KEYWORD).unwrap();
+    /// assert!(!*card.get_value::<bool>()?);
+    /// assert_eq!(card.get_comment()?, Rc::new(String::from("FITS STANDARD")));
+    /// # Ok::<(), astro_rs::fits::FitsHeaderError>(())
+    /// ```
     pub fn set_card<
         K: PartialEq<FitsHeaderKeyword> + Into<FitsHeaderKeyword>,
         T: FitsHeaderValue + 'static,

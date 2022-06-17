@@ -196,11 +196,17 @@ mod fits_tests {
             b_fits.write(&mut b_writer)?;
         }
 
-        let mut r_fits = HduList::new(BufReader::new(Cursor::new(r_writer.get_ref().get_ref().to_owned())));
+        let mut r_fits = HduList::new(BufReader::new(Cursor::new(
+            r_writer.get_ref().get_ref().to_owned(),
+        )));
         let r_data = r_fits.first_mut().unwrap().get_data::<Vec<i32>>().unwrap();
-        let mut g_fits = HduList::new(BufReader::new(Cursor::new(g_writer.get_ref().get_ref().to_owned())));
+        let mut g_fits = HduList::new(BufReader::new(Cursor::new(
+            g_writer.get_ref().get_ref().to_owned(),
+        )));
         let g_data = g_fits.first_mut().unwrap().get_data::<Vec<i32>>().unwrap();
-        let mut b_fits = HduList::new(BufReader::new(Cursor::new(b_writer.get_ref().get_ref().to_owned())));
+        let mut b_fits = HduList::new(BufReader::new(Cursor::new(
+            b_writer.get_ref().get_ref().to_owned(),
+        )));
         let b_data = b_fits.first_mut().unwrap().get_data::<Vec<i32>>().unwrap();
         let mut new_img = RgbImage::new(dim_x, dim_y);
         for i in 0..size {
