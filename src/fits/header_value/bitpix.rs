@@ -5,7 +5,7 @@ use crate::fits::FitsHeaderError;
 use super::FitsHeaderValue;
 
 /// An enumeration of valid values corresponding to the BITPIX keyword.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Bitpix {
     /// Indicates each data element is an unsigned 8 bit integer value.
     U8,
