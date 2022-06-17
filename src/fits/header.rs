@@ -125,12 +125,13 @@ impl FitsHeader {
     }
 
     /// Searches the header cards for a match with the given keyword.
-    /// 
+    ///
     /// ```
     /// use astro_rs::fits::*;
-    /// 
+    ///
     /// let mut hdu = primary_hdu::default();
     /// assert!(hdu.header.get_card(SIMPLE_KEYWORD).is_some());
+    /// assert!(hdu.header.get_card(EXTNAME_KEYWORD).is_none());
     /// ```
     pub fn get_card<K: PartialEq<FitsHeaderKeyword>>(
         &mut self,
@@ -147,18 +148,18 @@ impl FitsHeader {
     /// Sets the value and comment of the card with the given keyword.
     /// If a card already exists, the data is overwritten.
     /// If a card does not exist, one is created.
-    /// 
+    ///
     /// ```
     /// use astro_rs::fits::*;
     /// use std::rc::Rc;
-    /// 
+    ///
     /// let mut header = FitsHeader::new();
     /// header.set_card(SIMPLE_KEYWORD, true, None);
     /// assert!(*header
     ///     .get_card(SIMPLE_KEYWORD)
     ///     .and_then(|card| card.get_value::<bool>().ok())
     ///     .unwrap_or_default());
-    /// 
+    ///
     /// header.set_card(SIMPLE_KEYWORD, false, Some(String::from("FITS STANDARD")));
     /// let mut card = header.get_card(SIMPLE_KEYWORD).unwrap();
     /// assert!(!*card.get_value::<bool>()?);
@@ -200,6 +201,27 @@ impl FitsHeader {
     /// Sets the value of the card with the given keyword.
     /// If a card already exists, the value is overwritten, and the comment is retained.
     /// If a card does not exist, one is created.
+    ///
+    /// ```
+    /// use astro_rs::fits::*;
+    /// use std::rc::Rc;
+    ///
+    /// let bytes = *b"SIMPLE  =                    T / FITS STANDARD                                  ";
+    /// let mut header = FitsHeader::from_bytes(bytes.to_vec());
+    /// header.set_value(SIMPLE_KEYWORD, false)?;
+    /// let mut card = header.get_card(SIMPLE_KEYWORD).unwrap();
+    /// assert!(!*card.get_value::<bool>()?);
+    /// assert_eq!(card.get_comment()?, Rc::new(String::from("FITS STANDARD")));
+    ///
+    /// header.set_value(BITPIX_KEYWORD, Bitpix::U8)?;
+    /// assert_eq!(
+    ///     header
+    ///         .get_card(BITPIX_KEYWORD)
+    ///         .and_then(|card| card.get_value::<Bitpix>().ok()),
+    ///     Some(Rc::new(Bitpix::U8))
+    /// );
+    /// # Ok::<(), astro_rs::fits::FitsHeaderError>(())
+    /// ```
     pub fn set_value<K, T: FitsHeaderValue + 'static>(
         &mut self,
         keyword: K,
@@ -234,13 +256,27 @@ impl FitsHeader {
     /// Sets the comment of the card with the given keyword.
     /// If a card already exists, the comment is overwritten, and the value is retained.
     /// If a card does not exist, this function has no effect.
-    pub fn set_comment<K: PartialEq<FitsHeaderKeyword> + Into<FitsHeaderKeyword>>(
+    ///
+    /// ```
+    /// use astro_rs::fits::*;
+    /// use std::rc::Rc;
+    ///
+    /// let mut hdu = primary_hdu::default();
+    /// hdu.header.set_comment(SIMPLE_KEYWORD, Some(String::from("FITS STANDARD")));
+    /// let mut card = hdu.header.get_card(SIMPLE_KEYWORD).unwrap();
+    /// assert!(*card.get_value::<bool>()?);
+    /// assert_eq!(card.get_comment()?, Rc::new(String::from("FITS STANDARD")));
+    ///
+    /// hdu.header.set_comment(EXTNAME_KEYWORD, Some(String::from("Error 404")));
+    /// assert!(hdu.header.get_card(EXTNAME_KEYWORD).is_none());
+    /// # Ok::<(), astro_rs::fits::FitsHeaderError>(())
+    /// ```
+    pub fn set_comment<K: PartialEq<FitsHeaderKeyword>>(
         &mut self,
         keyword: K,
         comment: Option<String>,
     ) -> Result<(), FitsHeaderError> {
-        let fits_keyword = keyword.into();
-        if let Some(card) = self.get_card(fits_keyword) {
+        if let Some(card) = self.get_card(keyword) {
             card.value.set_comment(comment)?;
         }
         Ok(())
