@@ -425,7 +425,7 @@ impl Hdu {
 /// A trait that allows data to be serialized/deserialized as the data section of an HDU.
 pub trait FitsDataCollection: Debug {
     /// Attempts to deserialize a data collection from the given bytes.
-    fn from_bytes(raw: &Vec<u8>) -> Result<Self, FitsHeaderError>
+    fn from_bytes(raw: &[u8]) -> Result<Self, FitsHeaderError>
     where
         Self: Sized;
 
@@ -434,7 +434,7 @@ pub trait FitsDataCollection: Debug {
 }
 
 impl FitsDataCollection for Vec<u8> {
-    fn from_bytes(raw: &Vec<u8>) -> Result<Self, FitsHeaderError> {
+    fn from_bytes(raw: &[u8]) -> Result<Self, FitsHeaderError> {
         Ok(raw.to_owned())
     }
 
@@ -444,7 +444,7 @@ impl FitsDataCollection for Vec<u8> {
 }
 
 impl FitsDataCollection for Vec<i16> {
-    fn from_bytes(raw: &Vec<u8>) -> Result<Self, FitsHeaderError> {
+    fn from_bytes(raw: &[u8]) -> Result<Self, FitsHeaderError> {
         let mut data = Vec::with_capacity(raw.len() / 2);
         for chunk in raw.chunks_exact(2) {
             data.push(i16::from_be_bytes(chunk.try_into().unwrap()));
@@ -462,7 +462,7 @@ impl FitsDataCollection for Vec<i16> {
 }
 
 impl FitsDataCollection for Vec<i32> {
-    fn from_bytes(raw: &Vec<u8>) -> Result<Self, FitsHeaderError> {
+    fn from_bytes(raw: &[u8]) -> Result<Self, FitsHeaderError> {
         let mut data = Vec::with_capacity(raw.len() / 4);
         for chunk in raw.chunks_exact(4) {
             data.push(i32::from_be_bytes(chunk.try_into().unwrap()));
@@ -480,7 +480,7 @@ impl FitsDataCollection for Vec<i32> {
 }
 
 impl FitsDataCollection for Vec<f32> {
-    fn from_bytes(raw: &Vec<u8>) -> Result<Self, FitsHeaderError> {
+    fn from_bytes(raw: &[u8]) -> Result<Self, FitsHeaderError> {
         let mut data = Vec::with_capacity(raw.len() / 4);
         for chunk in raw.chunks_exact(4) {
             data.push(f32::from_be_bytes(chunk.try_into().unwrap()));
@@ -498,7 +498,7 @@ impl FitsDataCollection for Vec<f32> {
 }
 
 impl FitsDataCollection for Vec<f64> {
-    fn from_bytes(raw: &Vec<u8>) -> Result<Self, FitsHeaderError> {
+    fn from_bytes(raw: &[u8]) -> Result<Self, FitsHeaderError> {
         let mut data = Vec::with_capacity(raw.len() / 8);
         for chunk in raw.chunks_exact(8) {
             data.push(f64::from_be_bytes(chunk.try_into().unwrap()));
