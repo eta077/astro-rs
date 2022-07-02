@@ -55,7 +55,7 @@ impl<R: Read> HduList<R> {
     /// ```
     pub fn get_by_index(&mut self, index: usize) -> Option<&mut Hdu> {
         let mut cur_hdus = self.hdus.len();
-        while cur_hdus < index + 1 {
+        while cur_hdus <= index {
             let new_hdu = self.read_hdu()?;
             self.hdus.push(new_hdu);
             cur_hdus += 1;
@@ -349,6 +349,12 @@ impl Hdu {
     pub fn to_bytes(mut self) -> Vec<u8> {
         let mut result = self.header.to_bytes();
         result.append(&mut self.data_raw);
+        let remainder = result.len() % FITS_RECORD_LEN;
+        if remainder != 0 {
+            let num_cards = (result.len() / FITS_RECORD_LEN) + 1;
+            let new_len = num_cards * FITS_RECORD_LEN;
+            result.resize(new_len, 0);
+        }
         result
     }
 
@@ -375,46 +381,19 @@ impl Hdu {
         &self.data_raw
     }
 
-    /// Creates a Vec containing the data section of the HDU as the type defined by the BITPIX keyword.
-    pub fn get_data<T>(&mut self) -> Vec<T> {
-        *self
-            .header
-            .get_card(BITPIX_KEYWORD)
-            .and_then(|card| card.get_value::<Bitpix>().ok())
-            .map(|bitpix| unsafe {
-                match *bitpix {
-                    Bitpix::U8 => crate::return_box!(self.data_raw.to_owned()),
-                    Bitpix::I16 => {
-                        let mut data = Vec::with_capacity(self.data_raw.len() / 2);
-                        for chunk in self.data_raw.chunks_exact(2) {
-                            data.push(i16::from_be_bytes(chunk.try_into().unwrap()));
-                        }
-                        crate::return_box!(data)
-                    }
-                    Bitpix::I32 => {
-                        let mut data = Vec::with_capacity(self.data_raw.len() / 4);
-                        for chunk in self.data_raw.chunks_exact(4) {
-                            data.push(i32::from_be_bytes(chunk.try_into().unwrap()));
-                        }
-                        crate::return_box!(data)
-                    }
-                    Bitpix::F32 => {
-                        let mut data = Vec::with_capacity(self.data_raw.len() / 4);
-                        for chunk in self.data_raw.chunks_exact(4) {
-                            data.push(f32::from_be_bytes(chunk.try_into().unwrap()));
-                        }
-                        crate::return_box!(data)
-                    }
-                    Bitpix::F64 => {
-                        let mut data = Vec::with_capacity(self.data_raw.len() / 8);
-                        for chunk in self.data_raw.chunks_exact(8) {
-                            data.push(f64::from_be_bytes(chunk.try_into().unwrap()));
-                        }
-                        crate::return_box!(data)
-                    }
-                }
-            })
-            .unwrap_or_default()
+    /// Sets the data section of the HDU.
+    pub fn set_data_raw(&mut self, data_raw: Vec<u8>) {
+        self.data_raw = data_raw;
+    }
+
+    /// Attempts to create a new FitsDataCollection from the data section of the HDU.
+    pub fn get_data<T: FitsDataCollection>(&self) -> Result<T, FitsHeaderError> {
+        T::from_bytes(&self.data_raw)
+    }
+
+    /// Sets the data section of the HDU.
+    pub fn set_data<T: FitsDataCollection>(&mut self, data: &T) {
+        self.data_raw = data.to_bytes();
     }
 
     /// Creates a Vec containing the dimensions of the data section of the HDU as defined by the NAXIS keywords.
@@ -440,6 +419,99 @@ impl Hdu {
             result.push(naxisx);
         }
         result
+    }
+}
+
+/// A trait that allows data to be serialized/deserialized as the data section of an HDU.
+pub trait FitsDataCollection: Debug {
+    /// Attempts to deserialize a data collection from the given bytes.
+    fn from_bytes(raw: &[u8]) -> Result<Self, FitsHeaderError>
+    where
+        Self: Sized;
+
+    /// Serializes the data collection to bytes.
+    fn to_bytes(&self) -> Vec<u8>;
+}
+
+impl FitsDataCollection for Vec<u8> {
+    fn from_bytes(raw: &[u8]) -> Result<Self, FitsHeaderError> {
+        Ok(raw.to_owned())
+    }
+
+    fn to_bytes(&self) -> Vec<u8> {
+        self.to_owned()
+    }
+}
+
+impl FitsDataCollection for Vec<i16> {
+    fn from_bytes(raw: &[u8]) -> Result<Self, FitsHeaderError> {
+        let mut data = Vec::with_capacity(raw.len() / 2);
+        for chunk in raw.chunks_exact(2) {
+            data.push(i16::from_be_bytes(chunk.try_into().unwrap()));
+        }
+        Ok(data)
+    }
+
+    fn to_bytes(&self) -> Vec<u8> {
+        let mut data = Vec::with_capacity(self.len() * 2);
+        for chunk in self {
+            data.extend_from_slice(&chunk.to_be_bytes());
+        }
+        data
+    }
+}
+
+impl FitsDataCollection for Vec<i32> {
+    fn from_bytes(raw: &[u8]) -> Result<Self, FitsHeaderError> {
+        let mut data = Vec::with_capacity(raw.len() / 4);
+        for chunk in raw.chunks_exact(4) {
+            data.push(i32::from_be_bytes(chunk.try_into().unwrap()));
+        }
+        Ok(data)
+    }
+
+    fn to_bytes(&self) -> Vec<u8> {
+        let mut data = Vec::with_capacity(self.len() * 4);
+        for chunk in &*self {
+            data.extend_from_slice(&chunk.to_be_bytes());
+        }
+        data
+    }
+}
+
+impl FitsDataCollection for Vec<f32> {
+    fn from_bytes(raw: &[u8]) -> Result<Self, FitsHeaderError> {
+        let mut data = Vec::with_capacity(raw.len() / 4);
+        for chunk in raw.chunks_exact(4) {
+            data.push(f32::from_be_bytes(chunk.try_into().unwrap()));
+        }
+        Ok(data)
+    }
+
+    fn to_bytes(&self) -> Vec<u8> {
+        let mut data = Vec::with_capacity(self.len() * 4);
+        for chunk in &*self {
+            data.extend_from_slice(&chunk.to_be_bytes());
+        }
+        data
+    }
+}
+
+impl FitsDataCollection for Vec<f64> {
+    fn from_bytes(raw: &[u8]) -> Result<Self, FitsHeaderError> {
+        let mut data = Vec::with_capacity(raw.len() / 8);
+        for chunk in raw.chunks_exact(8) {
+            data.push(f64::from_be_bytes(chunk.try_into().unwrap()));
+        }
+        Ok(data)
+    }
+
+    fn to_bytes(&self) -> Vec<u8> {
+        let mut data = Vec::with_capacity(self.len() * 8);
+        for chunk in &*self {
+            data.extend_from_slice(&chunk.to_be_bytes());
+        }
+        data
     }
 }
 
