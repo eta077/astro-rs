@@ -4,12 +4,13 @@ mod tform;
 pub use bitpix::*;
 pub use tform::*;
 
+use std::any::{Any, TypeId};
 use std::fmt::Debug;
 
 use super::header::FitsHeaderError;
 
 /// A trait that allows data to be serialized/deserialized as a FITS header value.
-pub trait FitsHeaderValue: Debug {
+pub trait FitsHeaderValue: Debug + RealAny {
     /// Attempts to deserialize a value from the given bytes. The given bytes shall not be padded by spaces.
     fn from_bytes(raw: Vec<u8>) -> Result<Self, FitsHeaderError>
     where
@@ -17,6 +18,26 @@ pub trait FitsHeaderValue: Debug {
 
     /// Serializes the value to bytes. The bytes shall include padding spaces.
     fn to_bytes(&self) -> [u8; 70];
+}
+
+// credit to https://github.com/chris-morgan/mopa for this solution
+impl dyn FitsHeaderValue {
+    /// Determines if the type of `self` is the same as `T`.
+    pub fn is<T: FitsHeaderValue + 'static>(&self) -> bool {
+        TypeId::of::<T>() == RealAny::real_type_id(self)
+    }
+}
+
+/// A trait used to get the real type ID for implementors of `FitsHeaderValue`.
+pub trait RealAny {
+    /// Gets the base type ID for `self`.
+    fn real_type_id(&self) -> TypeId;
+}
+
+impl<T: Any> RealAny for T {
+    fn real_type_id(&self) -> TypeId {
+        TypeId::of::<T>()
+    }
 }
 
 /// ```

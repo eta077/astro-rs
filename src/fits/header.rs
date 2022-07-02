@@ -43,6 +43,9 @@ pub enum FitsHeaderError {
         /// The objective of the operation.
         intent: String,
     },
+    /// Indicates the expected type does not match the cached value type.
+    #[error("expected type does not match cached value type")]
+    InvalidType,
 }
 
 /// The header portion of an HDU.
@@ -501,8 +504,25 @@ impl FitsHeaderValueContainer {
     /// Gets the value of the header card.
     /// If the value has not yet been deserialized, the deserialization process is attempted.
     /// If the process succeeds, the deserialized value is cached.
+    ///
+    /// ```
+    /// use astro_rs::fits::*;
+    ///
+    /// let mut card = FitsHeaderCard::from(
+    ///     *b"SIMPLE  =                    T                                                  ",
+    /// );
+    /// assert!(card.get_value::<Bitpix>().is_err());
+    /// assert!(card.get_value::<bool>().map(|value| *value).unwrap_or_default());
+    /// // value is now cached, deserialization is not attempted, but types differ
+    /// assert!(card.get_value::<u32>().is_err());
+    /// assert!(card.get_value::<bool>().map(|value| *value).unwrap_or_default());
+    /// ```
     pub fn get_value<T: FitsHeaderValue + 'static>(&mut self) -> Result<Rc<T>, FitsHeaderError> {
         if let Some(data) = &self.value {
+            if !data.is::<T>() {
+                return Err(FitsHeaderError::InvalidType);
+            }
+            // safety: type is checked above
             unsafe {
                 let ptr = Rc::into_raw(Rc::clone(data));
                 let new_ptr: *const T = ptr.cast();
@@ -514,13 +534,15 @@ impl FitsHeaderValueContainer {
                 .iter()
                 .position(|b| *b == b'/')
                 .unwrap_or(self.raw.len());
-            let mut value_bytes: Vec<u8> = self.raw.drain(0..comment_start_index).collect();
+            let mut value_bytes = self.raw[0..comment_start_index].to_vec();
             // discard '=' prefix
             if value_bytes.first() == Some(&b'=') {
                 value_bytes.remove(0);
             }
 
             let data = Rc::new(T::from_bytes(Self::trim_value(value_bytes))?);
+            // only remove bytes from raw if deserialization is successful
+            self.raw = self.raw.split_off(comment_start_index);
             let ret = Rc::clone(&data);
             self.value = Some(data);
             Ok(ret)
