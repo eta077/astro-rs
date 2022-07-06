@@ -6,4 +6,7 @@
 #[cfg(feature = "coordinates")]
 #[cfg_attr(docsrs, doc(cfg(feature = "coordinates")))]
 pub mod coordinates;
+
+#[cfg(feature = "fits")]
+#[cfg_attr(docsrs, doc(cfg(feature = "fits")))]
 pub mod fits;

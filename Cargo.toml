@@ -34,6 +34,7 @@ tokio-test = { version = "0.4" }
 
 [features]
 coordinates = ["dep:chrono", "dep:hyper", "dep:measurements", "dep:urlencoding"]
+fits = []
 
 [[bench]]
 name = "fits_benchmark"
