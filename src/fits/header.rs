@@ -319,6 +319,19 @@ impl FitsHeaderCard {
     /// Gets the value of the header card.
     /// If the value has not yet been deserialized, the deserialization process is attempted.
     /// If the process succeeds, the deserialized value is cached.
+    ///
+    /// ```
+    /// use astro_rs::fits::*;
+    ///
+    /// let mut card = FitsHeaderCard::from(
+    ///     *b"SIMPLE  =                    T                                                  ",
+    /// );
+    /// assert!(card.get_value::<Bitpix>().is_err());
+    /// assert!(card.get_value::<bool>().map(|value| *value).unwrap_or_default());
+    /// // value is now cached, deserialization is not attempted, but types differ
+    /// assert!(card.get_value::<u32>().is_err());
+    /// assert!(card.get_value::<bool>().map(|value| *value).unwrap_or_default());
+    /// ```
     pub fn get_value<T: FitsHeaderValue + 'static>(&mut self) -> Result<Rc<T>, FitsHeaderError> {
         self.value.get_value()
     }
@@ -508,14 +521,14 @@ impl FitsHeaderValueContainer {
     /// ```
     /// use astro_rs::fits::*;
     ///
-    /// let mut card = FitsHeaderCard::from(
-    ///     *b"SIMPLE  =                    T                                                  ",
+    /// let mut card_value = FitsHeaderValueContainer::from(
+    ///     *b"=                    T                                                  ",
     /// );
-    /// assert!(card.get_value::<Bitpix>().is_err());
-    /// assert!(card.get_value::<bool>().map(|value| *value).unwrap_or_default());
+    /// assert!(card_value.get_value::<Bitpix>().is_err());
+    /// assert!(card_value.get_value::<bool>().map(|value| *value).unwrap_or_default());
     /// // value is now cached, deserialization is not attempted, but types differ
-    /// assert!(card.get_value::<u32>().is_err());
-    /// assert!(card.get_value::<bool>().map(|value| *value).unwrap_or_default());
+    /// assert!(card_value.get_value::<u32>().is_err());
+    /// assert!(card_value.get_value::<bool>().map(|value| *value).unwrap_or_default());
     /// ```
     pub fn get_value<T: FitsHeaderValue + 'static>(&mut self) -> Result<Rc<T>, FitsHeaderError> {
         if let Some(data) = &self.value {

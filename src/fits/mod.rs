@@ -1,5 +1,5 @@
 //! Serialize and deserialize FITS data.
-//! See https://archive.stsci.edu/fits/fits_standard/fits_standard.html for the FITS API.
+//! See <https://archive.stsci.edu/fits/fits_standard/fits_standard.html> for the FITS API.
 
 mod hdu_types;
 mod header;
@@ -515,9 +515,9 @@ impl FitsDataCollection for Vec<f64> {
     }
 }
 
+#[macro_use]
 pub(crate) mod hdu_macros {
     /// Creates a box of the given value and casts it to an implicit return type.
-    #[macro_export]
     macro_rules! return_box {
         ($result: expr) => {{
             let b = Box::new($result);
@@ -526,4 +526,6 @@ pub(crate) mod hdu_macros {
             Box::from_raw(new_ptr)
         }};
     }
+
+    pub(crate) use return_box;
 }

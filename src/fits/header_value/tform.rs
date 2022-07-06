@@ -1,6 +1,7 @@
 //! Defines the TFORM header value.
 
-use crate::{deserialize_column, fits::FitsHeaderError, return_box};
+use crate::fits::hdu_macros::return_box;
+use crate::fits::FitsHeaderError;
 
 use super::FitsHeaderValue;
 
@@ -110,7 +111,7 @@ impl TForm {
                     return_box!(result)
                 }
                 TFormType::I16 => {
-                    deserialize_column!(
+                    tform_macros::deserialize_column!(
                         i16,
                         num_rows,
                         row_len,
@@ -121,7 +122,7 @@ impl TForm {
                     )
                 }
                 TFormType::I32 => {
-                    deserialize_column!(
+                    tform_macros::deserialize_column!(
                         i32,
                         num_rows,
                         row_len,
@@ -135,7 +136,7 @@ impl TForm {
                     unsafe fn deserialize_char(value: [u8; 4]) -> char {
                         char::from_u32_unchecked(u32::from_be_bytes(value))
                     }
-                    deserialize_column!(
+                    tform_macros::deserialize_column!(
                         char,
                         num_rows,
                         row_len,
@@ -147,7 +148,7 @@ impl TForm {
                     )
                 }
                 TFormType::F32 => {
-                    deserialize_column!(
+                    tform_macros::deserialize_column!(
                         f32,
                         num_rows,
                         row_len,
@@ -158,7 +159,7 @@ impl TForm {
                     )
                 }
                 TFormType::F64 => {
-                    deserialize_column!(
+                    tform_macros::deserialize_column!(
                         f64,
                         num_rows,
                         row_len,
@@ -176,25 +177,16 @@ impl TForm {
     }
 }
 
+#[macro_use]
 mod tform_macros {
     /// Creates a boxed vector deserialized with the given function, or a default function if one is not given.
-    #[macro_export]
     macro_rules! deserialize_column {
-        ($value_type: ty, $num_rows: expr, $row_len: expr, $column_start: expr, $column_len: expr, $repeats: expr, $data: expr, $deserialize_fn: tt,) => {{
-            $crate::do_deserialize_column!(
-                $value_type,
-                $num_rows,
-                $row_len,
-                $column_start,
-                $column_len,
-                $repeats,
-                $data,
-                $deserialize_fn
-            )
+        (@dfn $value_type: ty) => {{
+            <$value_type>::from_be_bytes
         }};
         ($value_type: ty, $num_rows: expr, $row_len: expr, $column_start: expr, $column_len: expr, $repeats: expr, $data: expr,) => {{
-            let deserialize_fn = $crate::default_deserialize_fn!($value_type);
-            $crate::do_deserialize_column!(
+            let deserialize_fn = $crate::fits::header_value::tform::tform_macros::deserialize_column!(@dfn $value_type);
+            $crate::fits::header_value::tform::tform_macros::deserialize_column!(
                 $value_type,
                 $num_rows,
                 $row_len,
@@ -202,15 +194,10 @@ mod tform_macros {
                 $column_len,
                 $repeats,
                 $data,
-                deserialize_fn
+                deserialize_fn,
             )
         }};
-    }
-
-    /// Creates a boxed vector deserialized with the given function.
-    #[macro_export]
-    macro_rules! do_deserialize_column {
-        ($value_type: ty, $num_rows: expr, $row_len: expr, $column_start: expr, $column_len: expr, $repeats: expr, $data: expr, $deserialize_fn: tt) => {{
+        ($value_type: ty, $num_rows: expr, $row_len: expr, $column_start: expr, $column_len: expr, $repeats: expr, $data: expr, $deserialize_fn: tt,) => {{
             let mut result = Vec::with_capacity($num_rows * $repeats);
             for i in 0..$num_rows {
                 let start = $row_len * i + $column_start;
@@ -225,17 +212,11 @@ mod tform_macros {
                 }
             }
 
-            $crate::return_box!(result)
+            $crate::fits::hdu_macros::return_box!(result)
         }};
     }
 
-    /// Gets the default deserialization function for a type (assumes from_be_bytes).
-    #[macro_export]
-    macro_rules! default_deserialize_fn {
-        ($value_type: ty) => {
-            <$value_type>::from_be_bytes
-        };
-    }
+    pub(crate) use deserialize_column;
 }
 
 /// ```
