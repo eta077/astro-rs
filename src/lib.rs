@@ -7,6 +7,10 @@
 #[cfg_attr(docsrs, doc(cfg(feature = "coordinates")))]
 pub mod coordinates;
 
+#[cfg(feature = "cosmology")]
+#[cfg_attr(docsrs, doc(cfg(feature = "cosmology")))]
+pub mod cosmology;
+
 #[cfg(feature = "fits")]
 #[cfg_attr(docsrs, doc(cfg(feature = "fits")))]
 pub mod fits;

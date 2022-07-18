@@ -33,7 +33,9 @@ image = { version = "0.24", default-features = false, features = ["jpeg"] }
 tokio-test = { version = "0.4" }
 
 [features]
+default = ["fits"]
 coordinates = ["dep:chrono", "dep:hyper", "dep:measurements", "dep:urlencoding"]
+cosmology = []
 fits = []
 
 [[bench]]
