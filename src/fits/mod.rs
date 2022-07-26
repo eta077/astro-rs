@@ -5,7 +5,7 @@ mod hdu_types;
 mod header;
 mod header_value;
 
-use std::fmt::Debug;
+use std::fmt::{self, Debug, Display};
 use std::io::{BufReader, BufWriter, Cursor, Read, Write};
 use std::slice::IterMut;
 
@@ -419,6 +419,13 @@ impl Hdu {
             result.push(naxisx);
         }
         result
+    }
+}
+
+impl Display for Hdu {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "{}", self.header)?;
+        write!(f, "{} bytes of data", self.data_raw().len())
     }
 }
 

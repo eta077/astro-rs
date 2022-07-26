@@ -2,7 +2,7 @@
 
 use super::header_value::*;
 
-use std::fmt::Debug;
+use std::fmt::{self, Debug, Display};
 use std::rc::Rc;
 
 use thiserror::Error;
@@ -286,6 +286,16 @@ impl FitsHeader {
     }
 }
 
+impl Display for FitsHeader {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "{{")?;
+        for card in &self.cards {
+            writeln!(f, "    {card}")?;
+        }
+        write!(f, "}}")
+    }
+}
+
 /// A card within an HDU header section.
 ///
 /// ```
@@ -347,6 +357,12 @@ impl FitsHeaderCard {
     /// ```
     pub fn get_comment(&mut self) -> Result<Rc<String>, FitsHeaderError> {
         self.value.get_comment()
+    }
+}
+
+impl Display for FitsHeaderCard {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}: {}", self.keyword, self.value)
     }
 }
 
@@ -432,6 +448,13 @@ impl FitsHeaderKeyword {
             self.raw[i] = b' ';
             i += 1;
         }
+    }
+}
+
+impl Display for FitsHeaderKeyword {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let value = String::from_utf8(self.raw.to_vec()).map_err(|_| fmt::Error)?;
+        write!(f, "{value}")
     }
 }
 
@@ -691,6 +714,14 @@ impl FitsHeaderValueContainer {
                 value[index1..index2].to_vec()
             })
             .unwrap_or_default()
+    }
+}
+
+impl Display for FitsHeaderValueContainer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let raw: [u8; 72] = self.clone().into();
+        let value = String::from_utf8(raw.to_vec()).map_err(|_| fmt::Error)?;
+        write!(f, "{value}")
     }
 }
 
