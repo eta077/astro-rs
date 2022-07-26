@@ -1,3 +1,4 @@
+#[cfg(feature = "fits")]
 mod fits_tests {
     use std::error::Error;
     use std::fs::File;

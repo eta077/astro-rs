@@ -1,7 +1,16 @@
 #![deny(missing_docs)]
 #![deny(clippy::all)]
-//! This library provides utilities to interact with astronomical data.
+#![cfg_attr(docsrs, feature(doc_cfg))]
+#![doc = include_str!("../README.md")]
 
 #[cfg(feature = "coordinates")]
+#[cfg_attr(docsrs, doc(cfg(feature = "coordinates")))]
 pub mod coordinates;
+
+#[cfg(feature = "cosmology")]
+#[cfg_attr(docsrs, doc(cfg(feature = "cosmology")))]
+pub mod cosmology;
+
+#[cfg(feature = "fits")]
+#[cfg_attr(docsrs, doc(cfg(feature = "fits")))]
 pub mod fits;

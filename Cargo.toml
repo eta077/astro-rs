@@ -1,6 +1,6 @@
 [package]
 name = "astro-rs"
-version = "0.0.4"
+version = "0.1.0"
 edition = "2021"
 license = "MIT"
 description = "Astronomy utils"
@@ -16,6 +16,10 @@ exclude = [
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
 [dependencies]
 chrono = { version = "0.4", optional = true }
 hyper = { version = "0.14", features = ["client", "http1", "tcp"], optional = true }
@@ -29,7 +33,10 @@ image = { version = "0.24", default-features = false, features = ["jpeg"] }
 tokio-test = { version = "0.4" }
 
 [features]
+default = ["fits"]
 coordinates = ["dep:chrono", "dep:hyper", "dep:measurements", "dep:urlencoding"]
+cosmology = []
+fits = []
 
 [[bench]]
 name = "fits_benchmark"
