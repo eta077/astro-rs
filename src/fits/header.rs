@@ -140,12 +140,7 @@ impl FitsHeader {
         &mut self,
         keyword: K,
     ) -> Option<&mut FitsHeaderCard> {
-        for card in self.cards.iter_mut() {
-            if keyword == card.keyword {
-                return Some(card);
-            }
-        }
-        None
+        self.cards.iter_mut().find(|card| keyword == card.keyword)
     }
 
     /// Sets the value and comment of the card with the given keyword.

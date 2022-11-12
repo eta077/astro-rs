@@ -472,7 +472,7 @@ impl FitsDataCollection for Vec<i32> {
 
     fn to_bytes(&self) -> Vec<u8> {
         let mut data = Vec::with_capacity(self.len() * 4);
-        for chunk in &*self {
+        for chunk in self {
             data.extend_from_slice(&chunk.to_be_bytes());
         }
         data
@@ -490,7 +490,7 @@ impl FitsDataCollection for Vec<f32> {
 
     fn to_bytes(&self) -> Vec<u8> {
         let mut data = Vec::with_capacity(self.len() * 4);
-        for chunk in &*self {
+        for chunk in self {
             data.extend_from_slice(&chunk.to_be_bytes());
         }
         data
@@ -508,7 +508,7 @@ impl FitsDataCollection for Vec<f64> {
 
     fn to_bytes(&self) -> Vec<u8> {
         let mut data = Vec::with_capacity(self.len() * 8);
-        for chunk in &*self {
+        for chunk in self {
             data.extend_from_slice(&chunk.to_be_bytes());
         }
         data
