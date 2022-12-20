@@ -1,4 +1,7 @@
-![GitHub Build Status (branch)](https://img.shields.io/github/workflow/status/eta077/astro-rs/Build/release) ![GitHub Test Status (branch)](https://img.shields.io/github/workflow/status/eta077/astro-rs/Test/release?label=test) [![codecov](https://codecov.io/gh/eta077/astro-rs/branch/release/graph/badge.svg)](https://codecov.io/gh/eta077/astro-rs) [![docs.rs](https://img.shields.io/docsrs/astro-rs)](https://docs.rs/astro-rs/latest/astro_rs/)
+![GitHub Build Status (branch)](https://img.shields.io/github/actions/workflow/status/eta077/astro-rs/build.yml?branch=release) 
+![GitHub Test Status (branch)](https://img.shields.io/github/actions/workflow/status/eta077/astro-rs/test.yml?branch=release&label=test) 
+[![codecov](https://codecov.io/gh/eta077/astro-rs/branch/release/graph/badge.svg)](https://codecov.io/gh/eta077/astro-rs) 
+[![docs.rs](https://img.shields.io/docsrs/astro-rs)](https://docs.rs/astro-rs/latest/astro_rs/)
 
 # astro-rs
 This library provides utilities to interact with astronomical data.
