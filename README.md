@@ -14,10 +14,17 @@ Inspired by Astropy (<http://astropy.org> / <https://github.com/astropy/astropy>
 * Equal or surpass the Astropy benchmarks
 
 ## Technical goals
+* Use pure Rust as opposed to wrapping other libraries
 * Deserialize as lazily as possible
-* Balance 'tight' (<https://www.ecorax.net/tightness>) types and adherance to the FITS API with graceful handling of deviation
+* Balance 'tight' (<https://www.ecorax.net/tightness>) types and adherance to APIs with graceful handling of deviation
 
 # Testing
 Test assets are from the following sources:
 * <https://esahubble.org/projects/fits_liberator/datasets_archives>
 * <https://cxc.harvard.edu/cda/>
+
+# Licensing
+* Original code is licensed under the MIT license
+* `astropy` is licensed under BSD-3-Clause
+* `hifitime` is licensed under Apache-2.0
+* Code derived from the `erfa` project has a custom license, detailed [here](src/coordinates/erfa/LICENSE). Inclusion of this code is controlled by the `erfa` compilation feature, currently required by the `coordinates` feature.
