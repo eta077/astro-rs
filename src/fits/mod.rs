@@ -44,6 +44,8 @@ impl<R: Read> HduList<R> {
 
     /// Retrieves the HDU at the given index, or None if an HDU doesn't exist at the index.
     ///
+    /// # Examples
+    ///
     /// ```
     /// use astro_rs::fits::*;
     ///
@@ -65,6 +67,8 @@ impl<R: Read> HduList<R> {
 
     /// Retrieves the HDU with the given value for the `EXTNAME` keyword, or None if an HDU
     /// with the given name doesn't exist.
+    ///
+    /// # Examples
     ///
     /// ```
     /// use astro_rs::fits::*;
@@ -112,6 +116,8 @@ impl<R: Read> HduList<R> {
 
     /// Returns a mutable pointer to the first HDU, or `None` if the list is empty.
     ///
+    /// # Examples
+    ///
     /// ```
     /// use astro_rs::fits::*;
     ///
@@ -130,6 +136,8 @@ impl<R: Read> HduList<R> {
     }
 
     /// Deserializes all HDUs if necessary, then returns a mutable iterator over the HDUs.
+    ///
+    /// # Examples
     ///
     /// ```
     /// use astro_rs::fits::*;
@@ -160,10 +168,13 @@ impl<R: Read> HduList<R> {
     ///
     /// Panics if `index` is out of bounds.
     ///
+    /// # Examples
+    ///
     /// ```should_panic
     /// use astro_rs::fits::*;
     ///
     /// let mut hdu_list = HduList::default();
+    /// // panics, index is out of bounds
     /// hdu_list.insert(1, image_hdu::default());
     /// ```
     ///
@@ -190,6 +201,8 @@ impl<R: Read> HduList<R> {
 
     /// Appends `hdu` to the end of the HDU list.
     ///
+    /// # Examples
+    ///
     /// ```
     /// use astro_rs::fits::*;
     ///
@@ -207,6 +220,8 @@ impl<R: Read> HduList<R> {
     }
 
     /// Writes the HDU list via the given writer.
+    ///
+    /// # Examples
     ///
     /// ```
     /// use astro_rs::fits::*;
@@ -230,6 +245,8 @@ impl<R: Read> HduList<R> {
     }
 
     /// Validates the existence and format of the SIMPLE header card.
+    ///
+    /// # Examples
     ///
     /// ```
     /// use astro_rs::fits::*;
@@ -359,6 +376,8 @@ impl Hdu {
     }
 
     /// Gets the name of the HDU, or an empty string if the name cannot be determined.
+    ///
+    /// # Examples
     ///
     /// ```
     /// use astro_rs::fits::*;
