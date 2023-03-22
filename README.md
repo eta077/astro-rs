@@ -27,4 +27,3 @@ Test assets are from the following sources:
 * Original code is licensed under the MIT license
 * `astropy` is licensed under BSD-3-Clause
 * `hifitime` is licensed under Apache-2.0
-* Code derived from the `erfa` project has a custom license, detailed [here](src/coordinates/erfa/LICENSE). Inclusion of this code is controlled by the `erfa` compilation feature, currently required by the `coordinates` feature.
