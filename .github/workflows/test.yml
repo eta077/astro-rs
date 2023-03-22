@@ -32,6 +32,7 @@ jobs:
         run: |
           cargo install grcov
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
       - name: Run coverage
         run: |
           rm -rf coverage
@@ -39,6 +40,7 @@ jobs:
           CARGO_INCREMENTAL=0 RUSTFLAGS='-Cinstrument-coverage' LLVM_PROFILE_FILE='cargo-test-%p-%m.profraw' cargo test
           grcov . --binary-path ./target/debug/ -s . -t lcov --branch --ignore-not-existing --ignore "/*" --ignore "tests/*" -o coverage/tests.lcov
           rm -rf *.profraw
+
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v3
         with:

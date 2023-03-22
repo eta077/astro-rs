@@ -12,6 +12,7 @@ mod coordinate_tests {
     #[test]
     fn test_lookup_by_name() -> Result<(), Box<dyn Error>> {
         let m33_eq_coords = tokio_test::block_on(async { lookup_by_name("M33").await })?;
+
         let bear_mountain = EarthLocation {
             lat: Angle::new::<degree>(41.3),
             lon: Angle::new::<degree>(-74.0),
