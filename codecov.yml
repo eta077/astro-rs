@@ -1,13 +1,18 @@
 codecov:
   require_ci_to_pass: true
+  
 comment:
   behavior: default
-  layout: reach,diff,flags,tree,reach
-  show_carryforward_flags: false
+  layout: "reach,diff,files"
+  
 coverage:
   status:
     changes: false
     patch: false
     project: false
+    
+ignore:
+  - "tests"
+
 github_checks:
   annotations: true
