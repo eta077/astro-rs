@@ -63,12 +63,9 @@ jobs:
   msrv:
     name: MSRV
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        msrv: [1.60.0] # 2021 edition requires 1.56
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: ${{ matrix.msrv }}
+          toolchain: 1.60.0
       - run: cargo check --all-features
