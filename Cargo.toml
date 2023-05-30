@@ -26,7 +26,7 @@ hyper = { version = "0.14", features = ["client", "http1", "tcp"], optional = tr
 once_cell = { version = "1.16", optional = true }
 regex = { version = "1.7", optional = true }
 rust_decimal = { version = "1.29" }
-thiserror = { version = "1.0" }
+thiserror = { version = "1.0.7" }
 uom = { version = "0.34", optional = true, default-features = false, features = ["autoconvert", "si", "std", "f64"] }
 urlencoding = { version = "2.1", optional = true }
 
