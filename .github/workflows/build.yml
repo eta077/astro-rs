@@ -28,14 +28,6 @@ jobs:
           components: rustfmt
       - run: cargo fmt --check
 
-  check:
-    name: Check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: dtolnay/rust-toolchain@stable
-      - run: cargo check --all-features
-
   clippy:
     name: Clippy
     runs-on: ubuntu-latest
@@ -48,3 +40,35 @@ jobs:
         with:
           args: --all-features
           token: ${{ secrets.GITHUB_TOKEN }}
+          
+  doc:
+    name: Doc
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@nightly
+      - run: cargo doc --no-deps --all-features
+        env:
+          RUSTDOCFLAGS: --cfg docsrs
+          
+  hack:
+    name: Feature Unionization
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@cargo-hack
+      - run: cargo hack --feature-powerset check
+          
+  msrv:
+    name: MSRV
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        msrv: [1.56.1] # 2021 edition requires 1.56
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.msrv }}
+      - run: cargo check --all-features
