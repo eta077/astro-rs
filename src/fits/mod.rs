@@ -241,6 +241,7 @@ impl<R: Read> HduList<R> {
             writer.write_all(&hdu.clone().to_bytes())?;
         }
         std::io::copy(&mut self.reader, writer)?;
+        writer.flush()?;
         Ok(())
     }
 

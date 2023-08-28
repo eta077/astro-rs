@@ -27,12 +27,15 @@ num-traits = { version = "0.2", optional = true }
 once_cell = { version = "1.16", optional = true }
 regex = { version = "1.7", optional = true }
 rust_decimal = { version = "1.29" }
-thiserror = { version = "1.0" }
-uom = { version = "0.34", optional = true, default-features = false, features = ["autoconvert", "si", "std", "f64"] }
+thiserror = { version = "1.0.7" }
+uom = { version = "0.35", optional = true, default-features = false, features = ["autoconvert", "si", "std", "f64"] }
 urlencoding = { version = "2.1", optional = true }
 
+# pin tokio to retain MSRV
+tokio = { version = "= 1.29.1" }
+
 [dev-dependencies]
-criterion = { version = "0.4", features = ["html_reports"] }
+criterion = { version = "0.5", features = ["html_reports"] }
 image = { version = "0.24", default-features = false, features = ["jpeg"] }
 tokio-test = { version = "0.4" }
 
