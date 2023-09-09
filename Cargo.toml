@@ -30,8 +30,9 @@ thiserror = { version = "1.0.7" }
 uom = { version = "0.35", optional = true, default-features = false, features = ["autoconvert", "si", "std", "f64"] }
 urlencoding = { version = "2.1", optional = true }
 
-# pin tokio to retain MSRV
+# pin to retain MSRV
 tokio = { version = "= 1.29.1" }
+memchr = { version = "= 2.6.2" }
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
