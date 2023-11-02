@@ -63,6 +63,8 @@ impl FitsHeader {
 
     /// Constructs a FitsHeader from the given bytes.
     ///
+    /// # Examples
+    ///
     /// ```
     /// use astro_rs::fits::*;
     /// use std::rc::Rc;
@@ -105,6 +107,8 @@ impl FitsHeader {
 
     /// Serializes the header into bytes.
     ///
+    /// # Examples
+    ///
     /// ```
     /// use astro_rs::fits::*;
     ///
@@ -129,6 +133,8 @@ impl FitsHeader {
 
     /// Searches the header cards for a match with the given keyword.
     ///
+    /// # Examples
+    ///
     /// ```
     /// use astro_rs::fits::*;
     ///
@@ -140,17 +146,14 @@ impl FitsHeader {
         &mut self,
         keyword: K,
     ) -> Option<&mut FitsHeaderCard> {
-        for card in self.cards.iter_mut() {
-            if keyword == card.keyword {
-                return Some(card);
-            }
-        }
-        None
+        self.cards.iter_mut().find(|card| keyword == card.keyword)
     }
 
     /// Sets the value and comment of the card with the given keyword.
     /// If a card already exists, the data is overwritten.
     /// If a card does not exist, one is created.
+    ///
+    /// # Examples
     ///
     /// ```
     /// use astro_rs::fits::*;
@@ -204,6 +207,8 @@ impl FitsHeader {
     /// Sets the value of the card with the given keyword.
     /// If a card already exists, the value is overwritten, and the comment is retained.
     /// If a card does not exist, one is created.
+    ///
+    /// # Examples
     ///
     /// ```
     /// use astro_rs::fits::*;
@@ -260,6 +265,8 @@ impl FitsHeader {
     /// If a card already exists, the comment is overwritten, and the value is retained.
     /// If a card does not exist, this function has no effect.
     ///
+    /// # Examples
+    ///
     /// ```
     /// use astro_rs::fits::*;
     /// use std::rc::Rc;
@@ -287,6 +294,8 @@ impl FitsHeader {
 }
 
 /// A card within an HDU header section.
+///
+/// # Examples
 ///
 /// ```
 /// use astro_rs::fits::FitsHeaderCard;
@@ -320,6 +329,8 @@ impl FitsHeaderCard {
     /// If the value has not yet been deserialized, the deserialization process is attempted.
     /// If the process succeeds, the deserialized value is cached.
     ///
+    /// # Examples
+    ///
     /// ```
     /// use astro_rs::fits::*;
     ///
@@ -337,6 +348,8 @@ impl FitsHeaderCard {
     }
 
     /// Gets the comment section of the header card.
+    ///
+    /// # Examples
     ///
     /// ```
     /// use astro_rs::fits::FitsHeaderCard;
@@ -375,6 +388,8 @@ impl From<FitsHeaderCard> for [u8; 80] {
 /// A FITS header keyword.
 /// This wrapper provides functions to interact with both raw arrays and strings.
 ///
+/// # Examples
+///
 /// ```
 /// use astro_rs::fits::FitsHeaderKeyword;
 ///
@@ -393,6 +408,8 @@ pub struct FitsHeaderKeyword {
 impl FitsHeaderKeyword {
     /// Appends the given number to the keyword.
     /// If a number is already appended, it is replaced by the given number.
+    ///
+    /// # Examples
     ///
     /// ```
     /// use astro_rs::fits::*;
@@ -518,6 +535,8 @@ impl FitsHeaderValueContainer {
     /// If the value has not yet been deserialized, the deserialization process is attempted.
     /// If the process succeeds, the deserialized value is cached.
     ///
+    /// # Examples
+    ///
     /// ```
     /// use astro_rs::fits::*;
     ///
@@ -586,6 +605,8 @@ impl FitsHeaderValueContainer {
     }
 
     /// Gets the comment section of the header card.
+    ///
+    /// # Examples
     ///
     /// ```
     /// use astro_rs::fits::FitsHeaderValueContainer;

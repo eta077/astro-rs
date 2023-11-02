@@ -1,6 +1,6 @@
 [package]
 name = "astro-rs"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 license = "MIT"
 description = "Astronomy utils"
@@ -21,20 +21,27 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
-chrono = { version = "0.4", optional = true }
+hifitime = { version = "3.6", optional = true }
 hyper = { version = "0.14", features = ["client", "http1", "tcp"], optional = true }
-measurements = { version = "0.11", optional = true }
-thiserror = { version = "1.0" }
+once_cell = { version = "1.16", optional = true }
+rust_decimal = { version = "1.29" }
+thiserror = { version = "1.0.7" }
+uom = { version = "0.35", optional = true, default-features = false, features = ["autoconvert", "si", "std", "f64"] }
 urlencoding = { version = "2.1", optional = true }
 
+# pin to retain MSRV
+tokio = { version = "1, <1.30.0" }
+memchr = { version = "2.4, <2.6.3" }
+regex = { version = "1.7, <1.10.0", optional = true }
+
 [dev-dependencies]
-criterion = { version = "0.3", features = ["html_reports"] }
+criterion = { version = "0.5", features = ["html_reports"] }
 image = { version = "0.24", default-features = false, features = ["jpeg"] }
 tokio-test = { version = "0.4" }
 
 [features]
-default = ["fits"]
-coordinates = ["dep:chrono", "dep:hyper", "dep:measurements", "dep:urlencoding"]
+default = ["coordinates", "fits"]
+coordinates = ["dep:hifitime", "dep:hyper", "dep:once_cell", "dep:regex", "dep:uom", "dep:urlencoding"]
 cosmology = []
 fits = []
 

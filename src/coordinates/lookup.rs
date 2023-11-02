@@ -1,18 +1,31 @@
 use super::frames::Icrs;
+use super::lookup_config::SesameConfig;
 use super::EquatorialCoord;
 
+use hyper::client::HttpConnector;
 use hyper::Client;
-use measurements::Angle;
+use once_cell::sync::OnceCell;
+use regex::Regex;
 use thiserror::Error;
+use uom::si::angle::{degree, Angle};
 use urlencoding::encode;
 
-const SIMBAD_BASE_URL: &str =
-    "http://simbad.u-strasbg.fr/simbad/sim-id?output.format=votable&Ident=";
-const SIMBAD_OUTPUT_PARAMS: &str = "&output.params=ra(d;ICRS;J2000;2000),dec(d;ICRS;J2000;2000)";
+static SESAME_CONFIG: OnceCell<SesameConfig> = OnceCell::new();
+static SESAME_PARSER: OnceCell<Regex> = OnceCell::new();
+
+fn init_sesame_parser() -> Regex {
+    Regex::new(r"%J\s*([0-9\.]+)\s*([\+\-\.0-9]+)").unwrap()
+}
 
 /// An enumeration of errors that can occur while performing a coordinate lookup.
 #[derive(Debug, Error)]
 pub enum AstroLookupError {
+    /// Indicates the environmental variables contributing to the SESAME configuration are invalid.
+    #[error("Invalid configuration: {reason}")]
+    InvalidConfiguration {
+        /// The reason the configuration is invalid.
+        reason: String,
+    },
     /// Indicates an error occurred while obtaining the coordinate data.
     #[error(transparent)]
     NetworkError(#[from] hyper::Error),
@@ -32,15 +45,18 @@ pub enum AstroLookupError {
 
 /// Fetches the coordinates of an object with the given identifier.
 ///
+/// # Examples
+///
 /// ```
 /// use astro_rs::coordinates::{self, *};
-/// use measurements::Angle;
+/// use uom::si::angle::radian;
+/// use uom::si::f64::Angle;
 ///
 /// let m33_coords = tokio_test::block_on(async { coordinates::lookup_by_name("M33").await })?;
-/// assert_eq!(m33_coords, Icrs {
+/// assert_eq!(m33_coords.round(4), Icrs {
 ///     coords: EquatorialCoord {
-///         ra: Angle::from_degrees(23.46206906218),
-///         dec: Angle::from_degrees(30.66017511198)
+///         ra: Angle::new::<radian>(0.4095),
+///         dec: Angle::new::<radian>(0.5351)
 ///     },
 /// });
 ///
@@ -51,8 +67,43 @@ pub enum AstroLookupError {
 /// # Ok::<(), astro_rs::coordinates::AstroLookupError>(())
 /// ```
 pub async fn lookup_by_name(name: &str) -> Result<Icrs, AstroLookupError> {
+    let sesame_config = SESAME_CONFIG.get_or_init(SesameConfig::init);
+    let sesame_parser = SESAME_PARSER.get_or_init(init_sesame_parser);
     let client = Client::new();
-    let uri_string = [SIMBAD_BASE_URL, &encode(name), SIMBAD_OUTPUT_PARAMS].concat();
+
+    let mut err_result = Err(AstroLookupError::InvalidConfiguration {
+        reason: String::from("No configured SESAME URLs"),
+    });
+
+    for url in &sesame_config.urls {
+        let uri_string = [
+            url.as_str(),
+            if url.ends_with('/') { "" } else { "/" },
+            "~",
+            sesame_config.database.to_str(),
+            "?",
+            &encode(name),
+        ]
+        .concat();
+
+        let result = lookup_by_uri(name, sesame_parser, &client, uri_string).await;
+
+        if result.is_ok() {
+            return result;
+        } else {
+            err_result = result;
+        }
+    }
+
+    err_result
+}
+
+async fn lookup_by_uri(
+    name: &str,
+    sesame_parser: &Regex,
+    client: &Client<HttpConnector>,
+    uri_string: String,
+) -> Result<Icrs, AstroLookupError> {
     let uri = uri_string
         .parse()
         .map_err(|_| AstroLookupError::InvalidName {
@@ -60,48 +111,36 @@ pub async fn lookup_by_name(name: &str) -> Result<Icrs, AstroLookupError> {
         })?;
 
     let response = client.get(uri).await?;
-    let text_buf = hyper::body::to_bytes(response).await?;
-    let xml_string = String::from_utf8(text_buf.as_ref().to_vec()).map_err(|er| {
+    let body_bytes = hyper::body::to_bytes(response).await?;
+    let body_string = String::from_utf8(body_bytes.as_ref().to_vec()).map_err(|er| {
         AstroLookupError::ParseError {
             reason: er.to_string(),
         }
     })?;
 
-    if !xml_string.contains("<TD>") {
-        return Err(AstroLookupError::InvalidName {
-            name: name.to_owned(),
-        });
-    }
-    let mut xml_parts = xml_string.split("<TD>");
-    let ra = if let Some(ra_string) = xml_parts.nth(1) {
-        let ra_trimmed = ra_string.trim_end_matches(|c: char| !c.is_numeric());
-        ra_trimmed
-            .parse()
-            .map_err(|_| AstroLookupError::ParseError {
-                reason: ["Could not parse ra value: ", ra_trimmed].concat(),
-            })?
-    } else {
-        return Err(AstroLookupError::ParseError {
-            reason: String::from("Could not find ra value"),
-        });
-    };
-    let dec = if let Some(dec_string) = xml_parts.next() {
-        let dec_trimmed = dec_string.trim_end_matches(|c: char| !c.is_numeric());
-        dec_trimmed
-            .parse()
-            .map_err(|_| AstroLookupError::ParseError {
-                reason: ["Could not parse dec value: ", dec_trimmed].concat(),
-            })?
-    } else {
-        return Err(AstroLookupError::ParseError {
-            reason: String::from("Could not find dec value"),
-        });
-    };
+    if let Some(cap) = sesame_parser.captures(&body_string) {
+        let ra_string = &cap[1];
+        let dec_string = &cap[2];
 
-    Ok(Icrs {
-        coords: EquatorialCoord {
-            ra: Angle::from_degrees(ra),
-            dec: Angle::from_degrees(dec),
-        },
+        let ra: f64 = ra_string
+            .parse()
+            .map_err(|_| AstroLookupError::ParseError {
+                reason: ["Could not parse ra value: ", ra_string].concat(),
+            })?;
+        let dec: f64 = dec_string
+            .parse()
+            .map_err(|_| AstroLookupError::ParseError {
+                reason: ["Could not parse dec value: ", dec_string].concat(),
+            })?;
+
+        let coords = EquatorialCoord {
+            ra: Angle::new::<degree>(ra),
+            dec: Angle::new::<degree>(dec),
+        };
+        return Ok(Icrs { coords });
+    }
+
+    Err(AstroLookupError::InvalidName {
+        name: name.to_owned(),
     })
 }

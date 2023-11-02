@@ -1,24 +1,40 @@
-use chrono::{DateTime, Utc};
+use hifitime::Epoch;
+use thiserror::Error;
 
-use super::{EarthLocation, EquatorialCoord, HorizontalCoord};
+use super::{EarthLocation, EquatorialCoord};
+
+/// An enumeration of errors that can occur while converting coordinates from one frame to another.
+#[derive(Debug, Error)]
+pub enum AstroConversionError {}
 
 /// Coordinates in the International Celestial Reference System.
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub struct Icrs {
     /// The coordinate value
     pub coords: EquatorialCoord,
 }
 
 impl Icrs {
-    /// Converts coordinates from ICRS to AltAz
-    pub fn as_alt_az(&self, _date_time: &DateTime<Utc>, _location: &EarthLocation) -> AltAz {
-        AltAz::default()
+    /// Creates a new Icrs with the coordinate values rounded to the specified decimal place.
+    pub fn round(&self, dp: u32) -> Self {
+        Self {
+            coords: self.coords.round(dp),
+        }
+    }
+
+    /// Converts coordinates from ICRS to observed AltAz coordinates.
+    pub fn to_alt_az(
+        &self,
+        _date_time: &Epoch,
+        _location: &EarthLocation,
+    ) -> Result<AltAz, AstroConversionError> {
+        Ok(AltAz::default())
     }
 }
 
-/// Coordinates
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+/// Coordinates with respect to the WGS84 ellipsoid.
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub struct AltAz {
     /// The coordinate value
-    pub coords: HorizontalCoord,
+    pub coords: EquatorialCoord,
 }
