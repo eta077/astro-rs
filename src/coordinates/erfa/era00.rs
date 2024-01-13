@@ -30,12 +30,10 @@ pub fn era_era00(date_time: &Epoch) -> Angle {
     let f = d1 % 1.0 + d2 % 1.0;
 
     /* Earth rotation angle at this UT1. */
-    let theta = era_anp(
+    era_anp(
         (Angle::FULL_TURN * Angle::new::<radian>(f + 0.7790572732640 + 0.00273781191135448 * t))
             .into(),
-    );
-
-    theta
+    )
 }
 
 /*----------------------------------------------------------------------

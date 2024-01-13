@@ -36,9 +36,8 @@ pub fn era_gd2gce(a: Length, f: f64, elong: Angle, phi: Angle, height: Length) -
 
     /* Geocentric vector. */
     let r = (ac + height) * cp;
-    let xyz = [r * elong.cos(), r * elong.sin(), (r#as + height) * sp];
 
-    xyz
+    [r * elong.cos(), r * elong.sin(), (r#as + height) * sp]
 }
 
 /*----------------------------------------------------------------------
