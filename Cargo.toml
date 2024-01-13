@@ -1,6 +1,6 @@
 [package]
 name = "astro-rs"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 license = "MIT"
 description = "Astronomy utils"
@@ -21,18 +21,15 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
-hifitime = { version = "3.6", optional = true }
-hyper = { version = "0.14", features = ["client", "http1", "tcp"], optional = true }
-num-traits = { version = "0.2.15", optional = true }
-once_cell = { version = "1.16", optional = true }
+hifitime = { version = "3.9", optional = true }
+num-traits = { version = "0.2", optional = true }
+once_cell = { version = "1.19", optional = true }
 regex = { version = "1.7", optional = true }
-rust_decimal = { version = "1.29" }
+reqwest = { version = "0.11", optional = true }
+rust_decimal = { version = "1.33" }
 thiserror = { version = "1.0.7" }
 uom = { version = "0.35", optional = true, default-features = false, features = ["autoconvert", "si", "std", "f64"] }
 urlencoding = { version = "2.1", optional = true }
-
-# pin tokio to retain MSRV
-tokio = { version = "= 1.29.1" }
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
@@ -41,7 +38,7 @@ tokio-test = { version = "0.4" }
 
 [features]
 default = ["coordinates", "fits"]
-coordinates = ["dep:hifitime", "dep:hyper", "dep:once_cell", "dep:regex", "dep:uom", "dep:urlencoding", "erfa", "iers"]
+coordinates = ["dep:hifitime", "dep:once_cell", "dep:regex", "dep:reqwest", "dep:uom", "dep:urlencoding", "erfa", "iers"]
 cosmology = []
 erfa = []
 fits = []

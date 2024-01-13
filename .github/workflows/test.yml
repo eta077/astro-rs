@@ -22,7 +22,7 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - if: hashFiles('Cargo.lock') == ''
         run: cargo generate-lockfile
@@ -32,7 +32,7 @@ jobs:
     name: Minimal versions
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: dtolnay/rust-toolchain@nightly
       - run: rustup default stable
@@ -43,14 +43,15 @@ jobs:
     name: Coverage
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@v4
+      # nightly is required for --doctests, see cargo-llvm-cov#2
+      - uses: dtolnay/rust-toolchain@nightly
         with:
           components: llvm-tools-preview
       - uses: taiki-e/install-action@cargo-llvm-cov
       - if: hashFiles('Cargo.lock') == ''
         run: cargo generate-lockfile
-      - run: cargo llvm-cov --locked --all-features --lcov --output-path lcov.info
+      - run: cargo +nightly llvm-cov --locked --all-features --lcov --doctests --output-path lcov.info
       - uses: codecov/codecov-action@v3
         with:
           fail_ci_if_error: true

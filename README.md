@@ -30,4 +30,4 @@ Test assets are from the following sources:
 * Code derived from the `erfa` project has a custom license, detailed [here](src/coordinates/erfa/LICENSE). Inclusion of this code is controlled by the `erfa` compilation feature, currently required by the `coordinates` feature.
 
 # MSRV
-This crate's Minimum Supported Rust Version is `1.60.0`.
+This crate's Minimum Supported Rust Version is `1.68.2`.
