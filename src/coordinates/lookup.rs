@@ -103,7 +103,7 @@ async fn lookup_by_uri(
     client: &Client,
     uri_string: String,
 ) -> Result<Icrs, AstroLookupError> {
-    let response = client.get(uri_string).send().await?;
+    let response = client.get(&uri_string).send().await?;
     let body_string = response.text().await?;
 
     if let Some(cap) = sesame_parser.captures(&body_string) {
