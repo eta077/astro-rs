@@ -2,10 +2,9 @@ use super::frames::Icrs;
 use super::lookup_config::SesameConfig;
 use super::EquatorialCoord;
 
-use hyper::client::HttpConnector;
-use hyper::Client;
 use once_cell::sync::OnceCell;
 use regex::Regex;
+use reqwest::Client;
 use thiserror::Error;
 use uom::si::angle::{degree, Angle};
 use urlencoding::encode;
@@ -28,7 +27,7 @@ pub enum AstroLookupError {
     },
     /// Indicates an error occurred while obtaining the coordinate data.
     #[error(transparent)]
-    NetworkError(#[from] hyper::Error),
+    NetworkError(#[from] reqwest::Error),
     /// Indicates an error occurred while parsing the coordinate data.
     #[error("{reason}")]
     ParseError {
@@ -101,22 +100,11 @@ pub async fn lookup_by_name(name: &str) -> Result<Icrs, AstroLookupError> {
 async fn lookup_by_uri(
     name: &str,
     sesame_parser: &Regex,
-    client: &Client<HttpConnector>,
+    client: &Client,
     uri_string: String,
 ) -> Result<Icrs, AstroLookupError> {
-    let uri = uri_string
-        .parse()
-        .map_err(|_| AstroLookupError::InvalidName {
-            name: name.to_owned(),
-        })?;
-
-    let response = client.get(uri).await?;
-    let body_bytes = hyper::body::to_bytes(response).await?;
-    let body_string = String::from_utf8(body_bytes.as_ref().to_vec()).map_err(|er| {
-        AstroLookupError::ParseError {
-            reason: er.to_string(),
-        }
-    })?;
+    let response = client.get(&uri_string).send().await?;
+    let body_string = response.text().await?;
 
     if let Some(cap) = sesame_parser.captures(&body_string) {
         let ra_string = &cap[1];
