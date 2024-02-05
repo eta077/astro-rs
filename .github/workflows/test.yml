@@ -52,6 +52,6 @@ jobs:
       - if: hashFiles('Cargo.lock') == ''
         run: cargo generate-lockfile
       - run: cargo +nightly llvm-cov --locked --all-features --lcov --doctests --output-path lcov.info
-      - uses: codecov/codecov-action@v3
+      - uses: codecov/codecov-action@v4
         with:
           fail_ci_if_error: true
