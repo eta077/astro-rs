@@ -24,7 +24,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 hifitime = { version = "3.9", optional = true }
 once_cell = { version = "1.19", optional = true }
 regex = { version = "1.7", optional = true }
-reqwest = { version = "0.11", optional = true }
+reqwest = { version = "0.12", optional = true }
 rust_decimal = { version = "1.33" }
 thiserror = { version = "1.0.7" }
 uom = { version = "0.35", optional = true, default-features = false, features = ["autoconvert", "si", "std", "f64"] }
