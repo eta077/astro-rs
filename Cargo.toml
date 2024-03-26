@@ -27,12 +27,12 @@ regex = { version = "1.7", optional = true }
 reqwest = { version = "0.12", optional = true }
 rust_decimal = { version = "1.33" }
 thiserror = { version = "1.0.7" }
-uom = { version = "0.35", optional = true, default-features = false, features = ["autoconvert", "si", "std", "f64"] }
+uom = { version = "0.36", optional = true, default-features = false, features = ["autoconvert", "si", "std", "f64"] }
 urlencoding = { version = "2.1", optional = true }
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
-image = { version = "0.24", default-features = false, features = ["jpeg"] }
+image = { version = "0.25", default-features = false, features = ["jpeg"] }
 tokio-test = { version = "0.4" }
 
 [features]
