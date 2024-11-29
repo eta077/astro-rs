@@ -5,7 +5,7 @@ mod coordinate_tests {
     use astro_rs::coordinates::*;
 
     use hifitime::Epoch;
-    use uom::si::angle::degree;
+    use uom::si::angle::{degree, radian};
     use uom::si::f64::{Angle, Length};
     use uom::si::length::meter;
 
@@ -23,7 +23,13 @@ mod coordinate_tests {
 
         let m33_horiz_coords = m33_eq_coords.to_alt_az(&date_time, &bear_mountain)?.coords;
 
-        println!("{:?}", m33_horiz_coords.round(4));
+        assert_eq!(
+            m33_horiz_coords.round(4),
+            EquatorialCoord {
+                ra: Angle::new::<radian>(0.8257),
+                dec: Angle::new::<radian>(0.0022),
+            }
+        );
 
         Ok(())
     }

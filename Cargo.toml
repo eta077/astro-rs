@@ -23,6 +23,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
 hifitime = { version = "3.9", optional = true }
+num-traits = { version = "0.2", optional = true }
 once_cell = { version = "1.19", optional = true }
 regex = { version = "1.7", optional = true }
 reqwest = { version = "0.12", optional = true }
@@ -38,9 +39,11 @@ tokio-test = { version = "0.4" }
 
 [features]
 default = ["coordinates", "fits"]
-coordinates = ["dep:hifitime", "dep:once_cell", "dep:regex", "dep:reqwest", "dep:uom", "dep:urlencoding"]
+coordinates = ["dep:hifitime", "dep:once_cell", "dep:regex", "dep:reqwest", "dep:uom", "dep:urlencoding", "erfa", "iers"]
 cosmology = []
+erfa = []
 fits = []
+iers = ["dep:hifitime", "dep:num-traits", "dep:once_cell", "dep:uom"]
 
 [[bench]]
 name = "fits_benchmark"
