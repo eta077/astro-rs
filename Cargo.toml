@@ -2,7 +2,7 @@
 name = "astro-rs"
 version = "0.1.1"
 edition = "2021"
-rust-version = "1.77.1"
+rust-version = "1.81.0"
 license = "MIT"
 description = "Astronomy utils"
 repository = "https://github.com/eta077/astro-rs"
@@ -21,6 +21,12 @@ exclude = [
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
+[features]
+default = ["coordinates", "fits"]
+coordinates = ["dep:hifitime", "dep:once_cell", "dep:regex", "dep:reqwest", "dep:uom", "dep:urlencoding"]
+cosmology = []
+fits = []
+
 [dependencies]
 hifitime = { version = "3.9", optional = true }
 once_cell = { version = "1.19", optional = true }
@@ -31,20 +37,17 @@ thiserror = { version = "1.0.7" }
 uom = { version = "0.36", optional = true, default-features = false, features = ["autoconvert", "si", "std", "f64"] }
 urlencoding = { version = "2.1", optional = true }
 
+# pin to retain MSRV
+icu_normalizer = { version = "1, <1.4.3" }
+icu_properties = { version = "1, <1.4.3" }
+idna_adapter = { version = "1, <1.2.1" }
+
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
 image = { version = "0.25", default-features = false, features = ["jpeg"] }
 tokio-test = { version = "0.4" }
 
-[features]
-default = ["coordinates", "fits"]
-coordinates = ["dep:hifitime", "dep:once_cell", "dep:regex", "dep:reqwest", "dep:uom", "dep:urlencoding"]
-cosmology = []
-fits = []
-
 [[bench]]
 name = "fits_benchmark"
 harness = false
 
-[profile.bench]
-debug = true
