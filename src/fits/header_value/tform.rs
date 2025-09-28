@@ -1,7 +1,7 @@
 //! Defines the TFORM header value.
 
-use crate::fits::hdu_macros::return_box;
 use crate::fits::FitsHeaderError;
+use crate::fits::hdu_macros::return_box;
 
 use super::FitsHeaderValue;
 
@@ -133,8 +133,8 @@ impl TForm {
                     )
                 }
                 TFormType::Character => {
-                    unsafe fn deserialize_char(value: [u8; 4]) -> char {
-                        char::from_u32_unchecked(u32::from_be_bytes(value))
+                    fn deserialize_char(value: [u8; 4]) -> char {
+                        unsafe { char::from_u32_unchecked(u32::from_be_bytes(value)) }
                     }
                     tform_macros::deserialize_column!(
                         char,
