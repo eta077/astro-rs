@@ -1,8 +1,8 @@
 [package]
 name = "astro-rs"
 version = "0.1.1"
-edition = "2021"
-rust-version = "1.77.1"
+edition = "2024"
+rust-version = "1.85.1"
 license = "MIT"
 description = "Astronomy utils"
 repository = "https://github.com/eta077/astro-rs"

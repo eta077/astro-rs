@@ -29,4 +29,4 @@ Test assets are from the following sources:
 * `hifitime` is licensed under MPL-2.0
 
 # MSRV
-This crate's Minimum Supported Rust Version is `1.77.1`.
+This crate's Minimum Supported Rust Version is `1.85.1`.
