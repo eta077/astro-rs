@@ -4,9 +4,9 @@ use super::EquatorialCoord;
 
 use once_cell::sync::OnceCell;
 use regex::Regex;
-use reqwest::Client;
 use thiserror::Error;
 use uom::si::angle::{degree, Angle};
+use ureq::Agent;
 use urlencoding::encode;
 
 static SESAME_CONFIG: OnceCell<SesameConfig> = OnceCell::new();
@@ -27,7 +27,7 @@ pub enum AstroLookupError {
     },
     /// Indicates an error occurred while obtaining the coordinate data.
     #[error(transparent)]
-    NetworkError(#[from] reqwest::Error),
+    NetworkError(#[from] ureq::Error),
     /// Indicates an error occurred while parsing the coordinate data.
     #[error("{reason}")]
     ParseError {
@@ -51,7 +51,7 @@ pub enum AstroLookupError {
 /// use uom::si::angle::radian;
 /// use uom::si::f64::Angle;
 ///
-/// let m33_coords = tokio_test::block_on(async { coordinates::lookup_by_name("M33").await })?;
+/// let m33_coords = coordinates::lookup_by_name("M33")?;
 /// assert_eq!(m33_coords.round(4), Icrs {
 ///     coords: EquatorialCoord {
 ///         ra: Angle::new::<radian>(0.4095),
@@ -59,20 +59,16 @@ pub enum AstroLookupError {
 ///     },
 /// });
 ///
-/// let no_coords = tokio_test::block_on(async {
-///     coordinates::lookup_by_name("something that should not resolve").await
-/// });
+/// let no_coords = coordinates::lookup_by_name("something that should not resolve");
 /// assert!(no_coords.is_err());
 /// # Ok::<(), astro_rs::coordinates::AstroLookupError>(())
 /// ```
-pub async fn lookup_by_name(name: &str) -> Result<Icrs, AstroLookupError> {
+pub fn lookup_by_name(name: &str) -> Result<Icrs, AstroLookupError> {
     let sesame_config = SESAME_CONFIG.get_or_init(SesameConfig::init);
     let sesame_parser = SESAME_PARSER.get_or_init(init_sesame_parser);
-    let client = Client::new();
+    let client = Agent::new_with_defaults();
 
-    let mut err_result = Err(AstroLookupError::InvalidConfiguration {
-        reason: String::from("No configured SESAME URLs"),
-    });
+    let mut err_result = None;
 
     for url in &sesame_config.urls {
         let uri_string = [
@@ -85,26 +81,30 @@ pub async fn lookup_by_name(name: &str) -> Result<Icrs, AstroLookupError> {
         ]
         .concat();
 
-        let result = lookup_by_uri(name, sesame_parser, &client, uri_string).await;
+        let result = lookup_by_uri(name, sesame_parser, &client, uri_string);
 
         if result.is_ok() {
             return result;
         } else {
-            err_result = result;
+            err_result = Some(result);
         }
     }
 
-    err_result
+    err_result.unwrap_or_else(|| {
+        Err(AstroLookupError::InvalidConfiguration {
+            reason: String::from("No configured SESAME URLs"),
+        })
+    })
 }
 
-async fn lookup_by_uri(
+fn lookup_by_uri(
     name: &str,
     sesame_parser: &Regex,
-    client: &Client,
+    client: &Agent,
     uri_string: String,
 ) -> Result<Icrs, AstroLookupError> {
-    let response = client.get(&uri_string).send().await?;
-    let body_string = response.text().await?;
+    let mut response = client.get(&uri_string).call()?;
+    let body_string = response.body_mut().read_to_string()?;
 
     if let Some(cap) = sesame_parser.captures(&body_string) {
         let ra_string = &cap[1];

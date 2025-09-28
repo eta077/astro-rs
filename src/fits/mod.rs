@@ -155,7 +155,7 @@ impl<R: Read> HduList<R> {
     ///     })
     ///     .is_some())
     /// ```
-    pub fn iter_mut(&mut self) -> IterMut<Hdu> {
+    pub fn iter_mut(&mut self) -> IterMut<'_, Hdu> {
         while let Some(new_hdu) = self.read_hdu() {
             self.hdus.push(new_hdu);
         }
