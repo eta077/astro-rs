@@ -59,7 +59,7 @@ pub enum AstroLookupError {
 ///     },
 /// });
 ///
-/// let no_coords = coordinates::lookup_by_name("something that should not resolve").await;
+/// let no_coords = coordinates::lookup_by_name("something that should not resolve");
 /// assert!(no_coords.is_err());
 /// # Ok::<(), astro_rs::coordinates::AstroLookupError>(())
 /// ```
