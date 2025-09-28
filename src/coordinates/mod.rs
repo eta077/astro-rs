@@ -5,9 +5,9 @@ mod lookup;
 mod lookup_config;
 
 use rust_decimal::Decimal;
+use uom::ConstZero;
 use uom::si::angle::radian;
 use uom::si::f64::{Angle, Length};
-use uom::ConstZero;
 
 pub use frames::*;
 pub use lookup::*;

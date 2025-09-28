@@ -1,11 +1,11 @@
+use super::EquatorialCoord;
 use super::frames::Icrs;
 use super::lookup_config::SesameConfig;
-use super::EquatorialCoord;
 
 use once_cell::sync::OnceCell;
 use regex::Regex;
 use thiserror::Error;
-use uom::si::angle::{degree, Angle};
+use uom::si::angle::{Angle, degree};
 use ureq::Agent;
 use urlencoding::encode;
 
