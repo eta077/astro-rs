@@ -38,7 +38,7 @@ ureq = { version = "3.1.2", optional = true }
 urlencoding = { version = "2.1", optional = true }
 
 [dev-dependencies]
-criterion = { version = "0.5", features = ["html_reports"] }
+criterion = { version = "0.7", features = ["html_reports"] }
 image = { version = "0.25", default-features = false, features = ["jpeg"] }
 tokio-test = { version = "0.4" }
 
