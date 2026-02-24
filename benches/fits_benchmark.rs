@@ -1,7 +1,7 @@
 #[cfg(feature = "fits")]
 use {criterion::black_box, std::fs::File, std::io::BufReader};
 
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 
 #[allow(unused_variables)]
 fn bench_get_header(c: &mut Criterion) {
