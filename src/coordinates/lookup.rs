@@ -3,11 +3,11 @@ use super::frames::Icrs;
 use super::lookup_config::SesameConfig;
 
 use once_cell::sync::OnceCell;
+use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 use regex::Regex;
 use thiserror::Error;
 use uom::si::angle::{Angle, degree};
 use ureq::Agent;
-use urlencoding::encode;
 
 static SESAME_CONFIG: OnceCell<SesameConfig> = OnceCell::new();
 static SESAME_PARSER: OnceCell<Regex> = OnceCell::new();
@@ -77,7 +77,7 @@ pub fn lookup_by_name(name: &str) -> Result<Icrs, AstroLookupError> {
             "~",
             sesame_config.database.to_str(),
             "?",
-            &encode(name),
+            &utf8_percent_encode(name, NON_ALPHANUMERIC).to_string(),
         ]
         .concat();
 
