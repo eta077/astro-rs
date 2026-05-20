@@ -687,7 +687,7 @@ impl FitsHeaderValueContainer {
                 .iter()
                 .rposition(|b| *b != b' ')
                 .unwrap_or_default();
-            let diff = 68_usize.checked_sub(comment_start).unwrap_or_default(); // minus an additional 2 for the delimiter
+            let diff = 68_usize.saturating_sub(comment_start); // minus an additional 2 for the delimiter
             if diff < comment_str.len() {
                 return Err(FitsHeaderError::InvalidLength {
                     expected: diff,
