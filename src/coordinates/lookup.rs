@@ -3,11 +3,11 @@ use super::frames::Icrs;
 use super::lookup_config::SesameConfig;
 
 use once_cell::sync::OnceCell;
+use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 use regex::Regex;
 use thiserror::Error;
 use uom::si::angle::{Angle, degree};
 use ureq::Agent;
-use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 
 static SESAME_CONFIG: OnceCell<SesameConfig> = OnceCell::new();
 static SESAME_PARSER: OnceCell<Regex> = OnceCell::new();
