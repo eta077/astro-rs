@@ -23,7 +23,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
 default = ["coordinates", "fits"]
-coordinates = ["dep:hifitime", "dep:once_cell", "dep:regex", "dep:ureq", "dep:uom", "dep:urlencoding"]
+coordinates = ["dep:hifitime", "dep:once_cell", "dep:regex", "dep:ureq", "dep:uom", "dep:percent-encoding"]
 cosmology = []
 fits = []
 
@@ -35,7 +35,7 @@ rust_decimal = { version = "1.33" }
 thiserror = { version = "1.0.7" }
 uom = { version = "0.38", optional = true, default-features = false, features = ["autoconvert", "si", "std", "f64"] }
 ureq = { version = "3.1.2", optional = true }
-urlencoding = { version = "2.1", optional = true }
+percent-encoding = { version = "2.3.2", optional = true }
 
 [dev-dependencies]
 criterion = { version = "0.8", features = ["html_reports"] }

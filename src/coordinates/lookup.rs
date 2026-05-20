@@ -7,7 +7,7 @@ use regex::Regex;
 use thiserror::Error;
 use uom::si::angle::{Angle, degree};
 use ureq::Agent;
-use urlencoding::encode;
+use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 
 static SESAME_CONFIG: OnceCell<SesameConfig> = OnceCell::new();
 static SESAME_PARSER: OnceCell<Regex> = OnceCell::new();
@@ -77,7 +77,7 @@ pub fn lookup_by_name(name: &str) -> Result<Icrs, AstroLookupError> {
             "~",
             sesame_config.database.to_str(),
             "?",
-            &encode(name),
+            &utf8_percent_encode(name, NON_ALPHANUMERIC).to_string(),
         ]
         .concat();
 
