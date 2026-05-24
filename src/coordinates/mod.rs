@@ -1,5 +1,6 @@
 //! Compare, calculate, and transform spacial coordinates
 
+mod erfa;
 mod frames;
 mod lookup;
 mod lookup_config;
